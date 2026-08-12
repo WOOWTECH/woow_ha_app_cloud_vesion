@@ -16,16 +16,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.homeassistant.companion.android.R
 import io.homeassistant.companion.android.common.compose.theme.HADimens
@@ -66,23 +63,35 @@ internal fun CloudChooserScreen(
         )
 
         Text(
-            text = "請選擇您要如何連接 Home Assistant",
+            text = "請選擇您要如何使用連接 woowtech smarthome",
             style = HATextStyle.Body,
         )
 
         Spacer(modifier = Modifier.weight(0.1f))
 
         ChooserCard(
-            icon = { Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(32.dp)) },
+            icon = {
+                Image(
+                    painter = painterResource(R.drawable.ic_woowtech_branding),
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                )
+            },
             title = "連結本地設備",
-            subtitle = "連接您已架設好的 Home Assistant",
+            subtitle = "連結架設好的 woowtech smarthome",
             onClick = onLocalClick,
         )
 
         ChooserCard(
-            icon = { Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(32.dp)) },
+            icon = {
+                Image(
+                    painter = painterResource(R.drawable.ic_woowtech_branding),
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                )
+            },
             title = "使用雲端服務",
-            subtitle = "立即開通雲端 Woow HA",
+            subtitle = "立即開通使用 woowtech smarthome",
             onClick = onCloudClick,
         )
 
@@ -113,13 +122,19 @@ private fun ChooserCard(
         ) {
             icon()
             Column(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(text = title, style = HATextStyle.BodyMedium)
+                Text(
+                    text = title,
+                    style = HATextStyle.Body,
+                    textAlign = TextAlign.Start,
+                )
                 Text(
                     text = subtitle,
-                    style = HATextStyle.Body,
+                    style = HATextStyle.BodyMedium,
                     color = LocalHAColorScheme.current.colorOnNeutralNormal,
+                    textAlign = TextAlign.Start,
                 )
             }
         }

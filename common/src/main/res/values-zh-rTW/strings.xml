@@ -35,7 +35,7 @@
     <string name="allow">允許</string>
     <string name="always_show_first_view_on_app_start">開啟應用程式時總是顯示第一個視圖</string>
     <string name="always_show_first_view_on_app_start_summary">開啟應用程式時立即顯示預設儀表板的第一個視圖</string>
-    <string name="app_name">woowtech Home</string>
+    <string name="app_name">woowtech Home 雲端版</string>
     <string name="app_version_info">應用程式版本資訊</string>
     <string name="application_version">應用程式版本</string>
     <string name="attempting_authentication">正在驗證…</string>

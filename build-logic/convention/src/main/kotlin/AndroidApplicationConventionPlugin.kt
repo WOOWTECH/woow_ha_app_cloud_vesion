@@ -5,7 +5,7 @@ import org.gradle.api.Project
 import org.gradle.kotlin.dsl.apply
 import org.gradle.kotlin.dsl.configure
 
-private const val APPLICATION_ID = "com.woowtech.home"
+private const val APPLICATION_ID = "com.woowtech.homecloud"
 private const val NAMESPACE = "io.homeassistant.companion.android"
 
 /**

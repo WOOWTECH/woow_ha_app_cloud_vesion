@@ -13,8 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
@@ -109,7 +108,9 @@ fun LinkActivityScreen() {
     HomeAssistantAppTheme {
         Box(modifier = Modifier.fillMaxSize()) {
             Image(
-                imageVector = ImageVector.vectorResource(R.drawable.app_icon_launch),
+                // painterResource, not ImageVector.vectorResource: app_icon_launch is a PNG in this
+                // fork, and vectorResource can only parse XML vector drawables.
+                painter = painterResource(R.drawable.app_icon_launch),
                 contentDescription = null,
                 modifier = Modifier
                     .size(112.dp)

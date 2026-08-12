@@ -36,7 +36,7 @@ import io.homeassistant.companion.android.common.compose.theme.LocalHAColorSchem
 import io.homeassistant.companion.android.common.compose.theme.MaxButtonWidth
 import io.homeassistant.companion.android.common.compose.theme.defaultRippleAlpha
 
-private val buttonShape = RoundedCornerShape(size = HARadius.X2L)  // 20dp - woowtech VI compliant
+private val buttonShape = RoundedCornerShape(size = HARadius.X2L) // 20dp - woowtech VI compliant
 
 /**
  * Defines the visual styling variants for Home Assistant buttons.

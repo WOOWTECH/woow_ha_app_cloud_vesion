@@ -49,11 +49,7 @@ object HAGlassmorphism {
  * @return Modifier with glassmorphism effect applied
  */
 @Composable
-fun Modifier.glassmorphism(
-    isDark: Boolean = false,
-    opacity: Float = 0.50f,
-    applyBlur: Boolean = true,
-): Modifier {
+fun Modifier.glassmorphism(isDark: Boolean = false, opacity: Float = 0.50f, applyBlur: Boolean = true): Modifier {
     val backgroundColor = if (isDark) {
         HAGlassmorphism.DarkGlass30
     } else {
@@ -66,11 +62,11 @@ fun Modifier.glassmorphism(
                 Modifier.blur(HAGlassmorphism.BlurRadius)
             } else {
                 Modifier
-            }
+            },
         )
         .background(
             color = backgroundColor,
-            shape = RoundedCornerShape(HARadius.X2L)
+            shape = RoundedCornerShape(HARadius.X2L),
         )
 }
 
@@ -101,5 +97,4 @@ fun Modifier.lightGlass70(applyBlur: Boolean = true): Modifier =
  * @return Modifier with dark glass effect
  */
 @Composable
-fun Modifier.darkGlass(applyBlur: Boolean = true): Modifier =
-    glassmorphism(isDark = true, applyBlur = applyBlur)
+fun Modifier.darkGlass(applyBlur: Boolean = true): Modifier = glassmorphism(isDark = true, applyBlur = applyBlur)

@@ -1,0 +1,47 @@
+#!/usr/bin/env sh
+# Formats staged Kotlin before it can reach a commit.
+#
+# CLAUDE.md has asked for `./gradlew ktlintFormat` before committing for a long time, and
+# unformatted code still reached main and left CI red for over a week. A convention nobody can
+# forget is one a machine enforces, so this hook does the running.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Skip deliberately for a single commit (rebases, merge resolutions):
+#   git commit --no-verify
+
+set -e
+
+staged_kotlin=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.kts?$' || true)
+if [ -z "$staged_kotlin" ]; then
+    exit 0
+fi
+
+echo "pre-commit: formatting staged Kotlin..."
+if ! ./gradlew --quiet :build-logic:convention:ktlintFormat ktlintFormat; then
+    echo
+    echo "pre-commit: ktlintFormat failed. It cannot fix everything - some rules need a human."
+    echo "pre-commit: run './gradlew ktlintCheck --continue' to see what is left."
+    exit 1
+fi
+
+# Only re-stage files this commit already touches. Anything else ktlintFormat cleaned up stays in
+# the working tree, so unrelated formatting never rides along silently in someone's commit.
+reformatted=""
+for file in $staged_kotlin; do
+    if [ -f "$file" ] && ! git diff --quiet -- "$file"; then
+        reformatted="$reformatted $file"
+    fi
+done
+
+if [ -n "$reformatted" ]; then
+    echo "pre-commit: reformatted and re-staged:"
+    for file in $reformatted; do
+        echo "    $file"
+    done
+    # shellcheck disable=SC2086 # paths are intentionally split into separate arguments
+    git add $reformatted
+fi
+
+exit 0

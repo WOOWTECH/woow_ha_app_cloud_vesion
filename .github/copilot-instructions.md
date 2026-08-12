@@ -424,10 +424,26 @@ fun NavGraphBuilder.featureNavGraph() {
     - Feature: `feature/add-dark-mode`
     - Bug fix: `fix/crash-on-rotation`
 
+- **Enable the hooks once per clone** (do this before your first commit):
+
+  ```bash
+  git config core.hooksPath .githooks
+  ```
+
+  `.githooks/pre-commit` runs `ktlintFormat` on staged Kotlin and re-stages what it changed. Git
+  does not enable repository hooks by itself, so until this command is run the checklist below is
+  the only thing standing between unformatted code and a red CI.
+
 - **Before committing**:
     1. Run `./gradlew ktlintFormat` to format code
     2. Run `./gradlew test` to ensure tests pass
     3. Update changelog if user-facing changes
+
+- **Why formatting is not a matter of taste here**: `ktlint` gates the rest of CI. In
+  `.github/workflows/pr.yml`, `lint`, `screenshot_test`, `pr_build` and the unit tests all declare
+  `needs: [..., ktlint]`, so a single formatting violation skips every other job. A red `ktlint`
+  does not mean "the formatting is slightly off", it means **nothing was verified at all** - not the
+  build, not the tests. Never read skipped jobs as passing ones.
 
 ### Debugging & Development
 

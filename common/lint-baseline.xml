@@ -125,11 +125,33 @@
     <issue
         id="PrivateResource"
         message="Overriding `@string/state_off` which is marked as private in androidx.compose.ui:ui-android:1.10.1. If deliberate, use tools:override=&quot;true&quot;, otherwise pick a different name."
+        errorLine1="    &lt;string name=&quot;state_off&quot;>關閉&lt;/string>"
+        errorLine2="                  ~~~~~~~~~">
+        <location
+            file="src/main/res/values-zh-rTW/strings.xml"
+            line="834"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="PrivateResource"
+        message="Overriding `@string/state_on` which is marked as private in androidx.compose.ui:ui-android:1.10.1. If deliberate, use tools:override=&quot;true&quot;, otherwise pick a different name."
+        errorLine1="    &lt;string name=&quot;state_on&quot;>開啟&lt;/string>"
+        errorLine2="                  ~~~~~~~~">
+        <location
+            file="src/main/res/values-zh-rTW/strings.xml"
+            line="835"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="PrivateResource"
+        message="Overriding `@string/state_off` which is marked as private in androidx.compose.ui:ui-android:1.10.1. If deliberate, use tools:override=&quot;true&quot;, otherwise pick a different name."
         errorLine1="    &lt;string name=&quot;state_off&quot;>Off&lt;/string>"
         errorLine2="                  ~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="837"
+            line="840"
             column="19"/>
     </issue>
 
@@ -140,7 +162,7 @@
         errorLine2="                  ~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="838"
+            line="841"
             column="19"/>
     </issue>
 
@@ -151,7 +173,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings.xml"
-            line="379"
+            line="380"
             column="5"/>
     </issue>
 

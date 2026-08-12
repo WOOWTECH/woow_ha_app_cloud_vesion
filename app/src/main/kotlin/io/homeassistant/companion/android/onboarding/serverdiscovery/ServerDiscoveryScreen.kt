@@ -11,7 +11,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -76,10 +75,8 @@ import io.homeassistant.companion.android.common.compose.composable.HAPlainButto
 import io.homeassistant.companion.android.common.compose.composable.HATopBar
 import io.homeassistant.companion.android.common.compose.composable.alpha
 import io.homeassistant.companion.android.common.compose.theme.HABorderWidth
-import io.homeassistant.companion.android.common.compose.theme.HABrandColors
 import io.homeassistant.companion.android.common.compose.theme.HADimens
 import io.homeassistant.companion.android.common.compose.theme.HARadius
-import io.homeassistant.companion.android.common.compose.theme.HASize
 import io.homeassistant.companion.android.common.compose.theme.HATextStyle
 import io.homeassistant.companion.android.common.compose.theme.HAThemeForPreview
 import io.homeassistant.companion.android.common.compose.theme.LocalHAColorScheme
@@ -364,7 +361,10 @@ private fun AnimatedIcon() {
         )
         val pulse by rememberInfiniteTransition(label = "icon_pulse").animateFloat(
             initialValue = 1f,
-            targetValue = 1.15f,
+            // Keep pulse small so the icon stays inside the dots ring inner-clear zone
+            // (~68dp radius in a 220dp viewport). 1.15f used to breach that; 1.05f is safe
+            // for brand images with wordmarks as well.
+            targetValue = 1.05f,
             animationSpec = infiniteRepeatable(
                 animation = tween(durationMillis = 800, easing = LinearEasing),
                 repeatMode = RepeatMode.Reverse,

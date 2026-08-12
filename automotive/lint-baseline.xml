@@ -367,17 +367,6 @@
     <issue
         id="VectorRaster"
         message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
-        errorLine1="    android:width=&quot;288dp&quot;"
-        errorLine2="                   ~~~~~">
-        <location
-            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable-v31/app_icon_launch_screen.xml"
-            line="3"
-            column="20"/>
-    </issue>
-
-    <issue
-        id="VectorRaster"
-        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
         errorLine1="    android:width=&quot;220dp&quot;"
         errorLine2="                   ~~~~~">
         <location
@@ -679,7 +668,7 @@
         errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/button/ButtonWidgetConfigureActivity.kt"
-            line="360"
+            line="361"
             column="21"/>
     </issue>
 
@@ -690,7 +679,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/camera/CameraWidgetConfigureActivity.kt"
-            line="74"
+            line="75"
             column="25"/>
     </issue>
 
@@ -778,7 +767,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/entity/EntityWidgetConfigureActivity.kt"
-            line="88"
+            line="89"
             column="25"/>
     </issue>
 
@@ -833,7 +822,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/HomeAssistantApplication.kt"
-            line="236"
+            line="244"
             column="13"/>
     </issue>
 
@@ -844,7 +833,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/HomeAssistantApplication.kt"
-            line="246"
+            line="254"
             column="13"/>
     </issue>
 
@@ -855,7 +844,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/HomeAssistantApplication.kt"
-            line="301"
+            line="309"
             column="13"/>
     </issue>
 
@@ -866,7 +855,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="77"
+            line="104"
             column="5"/>
     </issue>
 
@@ -877,7 +866,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="91"
+            line="118"
             column="5"/>
     </issue>
 
@@ -888,7 +877,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="106"
+            line="133"
             column="5"/>
     </issue>
 
@@ -899,7 +888,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="122"
+            line="149"
             column="5"/>
     </issue>
 
@@ -910,7 +899,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="139"
+            line="166"
             column="5"/>
     </issue>
 
@@ -921,7 +910,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="154"
+            line="181"
             column="5"/>
     </issue>
 
@@ -932,7 +921,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="171"
+            line="206"
             column="5"/>
     </issue>
 
@@ -943,7 +932,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="188"
+            line="220"
             column="5"/>
     </issue>
 
@@ -954,7 +943,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="205"
+            line="237"
             column="5"/>
     </issue>
 
@@ -965,7 +954,40 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
-            line="221"
+            line="254"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 28"
+        errorLine1="    @RequiresApi(Build.VERSION_CODES.P)"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
+            line="270"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 28"
+        errorLine1="    @RequiresApi(Build.VERSION_CODES.P)"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
+            line="293"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 28"
+        errorLine1="    @RequiresApi(Build.VERSION_CODES.P)"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/util/IgnoreViolationRules.kt"
+            line="319"
             column="5"/>
     </issue>
 
@@ -1240,7 +1262,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/mediaplayer/MediaPlayerControlsWidgetConfigureActivity.kt"
-            line="77"
+            line="78"
             column="25"/>
     </issue>
 
@@ -1449,7 +1471,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/settings/SettingsFragment.kt"
-            line="386"
+            line="379"
             column="17"/>
     </issue>
 
@@ -1460,7 +1482,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/settings/SettingsFragment.kt"
-            line="386"
+            line="379"
             column="17"/>
     </issue>
 
@@ -1471,7 +1493,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/settings/SettingsFragment.kt"
-            line="419"
+            line="412"
             column="13"/>
     </issue>
 
@@ -1482,7 +1504,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/settings/SettingsFragment.kt"
-            line="531"
+            line="524"
             column="13"/>
     </issue>
 
@@ -1493,7 +1515,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/settings/SettingsFragment.kt"
-            line="541"
+            line="534"
             column="17"/>
     </issue>
 
@@ -1504,7 +1526,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/settings/SettingsFragment.kt"
-            line="541"
+            line="534"
             column="17"/>
     </issue>
 
@@ -1515,7 +1537,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/settings/SettingsFragment.kt"
-            line="563"
+            line="556"
             column="13"/>
     </issue>
 
@@ -1614,7 +1636,7 @@
         errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/template/TemplateWidgetConfigureActivity.kt"
-            line="148"
+            line="149"
             column="21"/>
     </issue>
 
@@ -2175,7 +2197,7 @@
         errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/webview/WebViewActivity.kt"
-            line="1353"
+            line="1361"
             column="21"/>
     </issue>
 
@@ -2186,7 +2208,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/webview/WebViewActivity.kt"
-            line="1472"
+            line="1480"
             column="17"/>
     </issue>
 
@@ -2601,6 +2623,39 @@
 
     <issue
         id="UnusedResources"
+        message="The resource `R.drawable.ic_casita_crying` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable/ic_casita_crying.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_casita_no_connection` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable/ic_casita_no_connection.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_casita_problem` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable/ic_casita_problem.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
         message="The resource `R.drawable.ic_delete` appears to be unused"
         errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
         errorLine2="^">
@@ -2619,6 +2674,24 @@
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable/ic_filter.xml"
             line="1"
             column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_home_assistant_branding` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable/ic_home_assistant_branding.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_launcher_foreground_round` appears to be unused">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable-hdpi/ic_launcher_foreground_round.png"/>
     </issue>
 
     <issue
@@ -2685,6 +2758,162 @@
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/layout/widget_media_controls.xml"
             line="13"
             column="6"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-hdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-mdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-xhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-xxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-xxxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-hdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-mdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-xhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-xxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-xxxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-hdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-mdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-xhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-xxhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*5}/mipmap-xxxhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-hdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-mdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-xhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-xxhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/mipmap-xxxhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicatesConfig"
+        message="The `app_icon_launch.png` icon has identical contents in the following configuration folders: drawable-hdpi, drawable">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable/app_icon_launch.png"/>
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable-hdpi/app_icon_launch.png"/>
+    </issue>
+
+    <issue
+        id="IconLocation"
+        message="Found bitmap drawable `res/drawable/app_icon_launch.png` in densityless folder">
+        <location
+            file="${:automotive*fullDebug*MAIN*sourceProvider*0*resDir*1}/drawable/app_icon_launch.png"/>
     </issue>
 
     <issue
@@ -2795,7 +3024,7 @@
         errorLine2="                                ~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/button/ButtonWidgetConfigureActivity.kt"
-            line="150"
+            line="151"
             column="33"/>
     </issue>
 
@@ -2806,7 +3035,7 @@
         errorLine2="                                                          ~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/button/ButtonWidgetConfigureActivity.kt"
-            line="418"
+            line="419"
             column="59"/>
     </issue>
 
@@ -4390,7 +4619,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/entity/EntityWidgetConfigureActivity.kt"
-            line="131"
+            line="132"
             column="42"/>
     </issue>
 
@@ -4401,7 +4630,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:automotive*fullDebug*MAIN*sourceProvider*0*javaDir*5}/io/homeassistant/companion/android/widgets/template/TemplateWidgetConfigureActivity.kt"
-            line="95"
+            line="96"
             column="42"/>
     </issue>
 

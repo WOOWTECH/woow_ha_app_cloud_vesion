@@ -24,6 +24,8 @@ import io.homeassistant.companion.android.common.data.keychain.NamedKeyChain
 import io.homeassistant.companion.android.common.data.prefs.PrefsRepository
 import io.homeassistant.companion.android.common.sensors.AudioSensorManager
 import io.homeassistant.companion.android.common.sensors.LastUpdateManager
+import io.homeassistant.companion.android.common.util.DefaultFailFastHandler
+import io.homeassistant.companion.android.common.util.FailFast
 import io.homeassistant.companion.android.common.util.HAStrictMode
 import io.homeassistant.companion.android.common.util.isAutomotive
 import io.homeassistant.companion.android.database.sensor.SensorDao
@@ -32,6 +34,7 @@ import io.homeassistant.companion.android.database.settings.SettingsDao
 import io.homeassistant.companion.android.sensors.SensorReceiver
 import io.homeassistant.companion.android.settings.language.LanguagesManager
 import io.homeassistant.companion.android.themes.NightModeManager
+import io.homeassistant.companion.android.util.CrashSavingFailFastHandler
 import io.homeassistant.companion.android.util.LifecycleHandler
 import io.homeassistant.companion.android.util.QuestUtil
 import io.homeassistant.companion.android.util.initCrashSaving
@@ -83,6 +86,11 @@ open class HomeAssistantApplication :
     @OptIn(ExperimentalComposeRuntimeApi::class)
     override fun onCreate() {
         super.onCreate()
+
+        // Registered before StrictMode so that violations raised during startup are recorded too.
+        // Cannot wait for the ioScope below: the first violation usually happens while the first
+        // activity attaches, which can win the race against that coroutine.
+        FailFast.setHandler(CrashSavingFailFastHandler(applicationContext, DefaultFailFastHandler))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             BuildConfig.DEBUG &&

@@ -43,7 +43,7 @@ fun HABanner(modifier: Modifier = Modifier, content: @Composable RowScope.() -> 
             .background(
                 color = LocalHAColorScheme.current.colorFillNeutralNormalResting,
                 shape = RoundedCornerShape(
-                    HARadius.X2L,  // 20dp - woowtech VI compliant
+                    HARadius.X2L, // 20dp - woowtech VI compliant
                 ),
             )
             .padding(HADimens.SPACE4),

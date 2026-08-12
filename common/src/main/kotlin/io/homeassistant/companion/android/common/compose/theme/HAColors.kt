@@ -43,7 +43,7 @@ private object HAColors {
     val Primary20 = Color(0xFF283B93)
     val Primary30 = Color(0xFF3A52B6)
     val Primary40 = Color(0xFF4D6AD9)
-    val Primary50 = Color(0xFF6183FC)  // woowtech Brand Blue
+    val Primary50 = Color(0xFF6183FC) // woowtech Brand Blue
     val Primary60 = Color(0xFF879FFC)
     val Primary70 = Color(0xFFA5B7FF)
     val Primary80 = Color(0xFFC3CFFF)
@@ -56,7 +56,7 @@ private object HAColors {
     val Blue20 = Color(0xFF283B93)
     val Blue30 = Color(0xFF3A52B6)
     val Blue40 = Color(0xFF4D6AD9)
-    val Blue50 = Color(0xFF6183FC)  // woowtech Brand Blue
+    val Blue50 = Color(0xFF6183FC) // woowtech Brand Blue
     val Blue60 = Color(0xFF879FFC)
     val Blue70 = Color(0xFFA5B7FF)
     val Blue80 = Color(0xFFC3CFFF)
@@ -69,7 +69,7 @@ private object HAColors {
     val Brand20 = Color(0xFF283B93)
     val Brand30 = Color(0xFF3A52B6)
     val Brand40 = Color(0xFF4D6AD9)
-    val Brand50 = Color(0xFF6183FC)  // woowtech Brand Blue
+    val Brand50 = Color(0xFF6183FC) // woowtech Brand Blue
     val Brand60 = Color(0xFF879FFC)
     val Brand70 = Color(0xFFA5B7FF)
     val Brand80 = Color(0xFFC3CFFF)
@@ -202,10 +202,10 @@ private object HAColors {
  * Background: #FFFFFF
  */
 object HABrandColors {
-    val Blue = Color(0xFF6183FC)  // woowtech Brand Blue
-    val Background = Color(0xFFFFFFFF)  // VI System background
-    val TextPrimary = Color(0xFF212121)  // VI System text primary
-    val TextSecondary = Color(0xFF646262)  // VI System text secondary
+    val Blue = Color(0xFF6183FC) // woowtech Brand Blue
+    val Background = Color(0xFFFFFFFF) // VI System background
+    val TextPrimary = Color(0xFF212121) // VI System text primary
+    val TextSecondary = Color(0xFF646262) // VI System text secondary
 }
 
 @Immutable
@@ -628,7 +628,7 @@ class HAColorScheme(
 }
 
 val DarkHAColorScheme = HAColorScheme(
-    colorFillPrimaryLoudResting = HAColors.Primary40,
+    colorFillPrimaryLoudResting = HAColors.Primary50,
     colorFillPrimaryNormalResting = HAColors.Primary10,
     colorFillPrimaryQuietResting = HAColors.Primary05,
     colorFillPrimaryLoudHover = HAColors.Primary30,
@@ -706,7 +706,7 @@ val DarkHAColorScheme = HAColorScheme(
 )
 
 val LightHAColorScheme = HAColorScheme(
-    colorFillPrimaryLoudResting = HAColors.Primary40,
+    colorFillPrimaryLoudResting = HAColors.Primary50,
     colorFillPrimaryNormalResting = HAColors.Primary90,
     colorFillPrimaryQuietResting = HAColors.Primary95,
     colorFillPrimaryLoudHover = HAColors.Primary30,

@@ -367,3 +367,10 @@ playStorePublishServiceCredentialsFile.json
 
 ## Temp results from the CI
 merged_results.sarif
+
+# Local secrets
+.env
+
+## Local test evidence: device crash traces, screenshots, repro scripts and
+## downloaded APKs. Large binaries, never committed.
+_test/

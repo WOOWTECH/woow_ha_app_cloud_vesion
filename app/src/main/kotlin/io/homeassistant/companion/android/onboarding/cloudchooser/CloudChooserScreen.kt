@@ -37,11 +37,7 @@ import io.homeassistant.companion.android.util.compose.HAPreviews
 private val ICON_SIZE = 120.dp
 
 @Composable
-internal fun CloudChooserScreen(
-    onLocalClick: () -> Unit,
-    onCloudClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+internal fun CloudChooserScreen(onLocalClick: () -> Unit, onCloudClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()

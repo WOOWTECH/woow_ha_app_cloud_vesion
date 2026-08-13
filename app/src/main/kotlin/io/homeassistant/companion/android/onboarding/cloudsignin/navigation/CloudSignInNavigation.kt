@@ -15,10 +15,7 @@ internal fun NavController.navigateToCloudSignIn(navOptions: NavOptions? = null)
     navigate(route = CloudSignInRoute, navOptions)
 }
 
-internal fun NavGraphBuilder.cloudSignInScreen(
-    onBackClick: () -> Unit,
-    onAuthorized: (accessToken: String) -> Unit,
-) {
+internal fun NavGraphBuilder.cloudSignInScreen(onBackClick: () -> Unit, onAuthorized: (accessToken: String) -> Unit) {
     composable<CloudSignInRoute> {
         CloudSignInScreen(
             viewModel = hiltViewModel(),

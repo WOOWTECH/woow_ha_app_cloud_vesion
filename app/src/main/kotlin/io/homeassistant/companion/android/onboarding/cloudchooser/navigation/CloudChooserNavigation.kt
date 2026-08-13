@@ -14,10 +14,7 @@ internal fun NavController.navigateToCloudChooser(navOptions: NavOptions? = null
     navigate(route = CloudChooserRoute, navOptions)
 }
 
-internal fun NavGraphBuilder.cloudChooserScreen(
-    onLocalClick: () -> Unit,
-    onCloudClick: () -> Unit,
-) {
+internal fun NavGraphBuilder.cloudChooserScreen(onLocalClick: () -> Unit, onCloudClick: () -> Unit) {
     composable<CloudChooserRoute> {
         CloudChooserScreen(onLocalClick = onLocalClick, onCloudClick = onCloudClick)
     }

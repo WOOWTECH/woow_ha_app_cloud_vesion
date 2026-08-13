@@ -44,7 +44,6 @@ import io.homeassistant.companion.android.onboarding.sethomenetwork.navigation.s
 import io.homeassistant.companion.android.onboarding.wearmtls.navigation.URL_MTLS_DOCUMENTATION
 import io.homeassistant.companion.android.onboarding.wearmtls.navigation.navigateToWearMTLS
 import io.homeassistant.companion.android.onboarding.wearmtls.navigation.wearMTLSScreen
-import io.homeassistant.companion.android.onboarding.welcome.navigation.WelcomeRoute
 import io.homeassistant.companion.android.onboarding.welcome.navigation.navigateToWelcome
 import io.homeassistant.companion.android.onboarding.welcome.navigation.welcomeScreen
 import io.homeassistant.companion.android.util.canGoBack

@@ -3,6 +3,7 @@ package io.homeassistant.companion.android.onboarding.cloudsignin
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -127,7 +128,11 @@ internal fun CloudSignInScreen(
 }
 
 @Composable
-private fun WaitingForAuthContent(userCode: String, verificationUriComplete: String, isReconnecting: Boolean) {
+private fun ColumnScope.WaitingForAuthContent(
+    userCode: String,
+    verificationUriComplete: String,
+    isReconnecting: Boolean,
+) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
@@ -181,7 +186,7 @@ private fun WaitingForAuthContent(userCode: String, verificationUriComplete: Str
 }
 
 @Composable
-private fun ErrorContent(message: String, canRetry: Boolean, onRetry: () -> Unit) {
+private fun ColumnScope.ErrorContent(message: String, canRetry: Boolean, onRetry: () -> Unit) {
     Icon(
         imageVector = Icons.Default.ErrorOutline,
         contentDescription = null,

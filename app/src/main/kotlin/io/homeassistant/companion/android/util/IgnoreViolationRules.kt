@@ -1,3 +1,10 @@
+// The @RequiresApi(Build.VERSION_CODES.P) guards below are required for :app
+// (minSdk 23) so pre-P callers do not resolve `android.os.strictmode.*` classes.
+// They are flagged as ObsoleteSdkInt by Android Lint when this same file is
+// compiled into :automotive (minSdk 29) because API 28 is guaranteed there.
+// Suppress at file level — the guard is still functionally correct for :app.
+@file:Suppress("ObsoleteSdkInt")
+
 package io.homeassistant.companion.android.util
 
 import android.os.Build

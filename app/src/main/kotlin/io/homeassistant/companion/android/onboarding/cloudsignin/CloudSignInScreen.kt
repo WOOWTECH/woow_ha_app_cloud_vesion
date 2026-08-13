@@ -1,7 +1,6 @@
 package io.homeassistant.companion.android.onboarding.cloudsignin
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +35,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.homeassistant.companion.android.common.compose.composable.HAAccentButton
 import io.homeassistant.companion.android.common.compose.composable.HAPlainButton
@@ -173,7 +173,7 @@ private fun WaitingForAuthContent(userCode: String, verificationUriComplete: Str
     HAAccentButton(
         text = "前往驗證",
         onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(verificationUriComplete))
+            val intent = Intent(Intent.ACTION_VIEW, verificationUriComplete.toUri())
             context.startActivity(intent)
         },
         modifier = Modifier.fillMaxWidth(),

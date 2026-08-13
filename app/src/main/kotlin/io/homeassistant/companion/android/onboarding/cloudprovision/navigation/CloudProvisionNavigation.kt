@@ -16,10 +16,7 @@ internal fun NavController.navigateToCloudProvision(navOptions: NavOptions? = nu
     navigate(route = CloudProvisionRoute, navOptions)
 }
 
-internal fun NavGraphBuilder.cloudProvisionScreen(
-    onBackClick: () -> Unit,
-    sharedState: CloudOnboardingState,
-) {
+internal fun NavGraphBuilder.cloudProvisionScreen(onBackClick: () -> Unit, sharedState: CloudOnboardingState) {
     composable<CloudProvisionRoute> {
         CloudProvisionScreen(
             viewModel = hiltViewModel(),

@@ -1,9 +1,9 @@
 package io.homeassistant.companion.android.onboarding.cloudsignin
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.homeassistant.companion.android.common.compose.composable.HAAccentButton
 import io.homeassistant.companion.android.common.compose.composable.HAPlainButton
@@ -100,6 +101,7 @@ internal fun CloudSignInScreen(
                     WaitingForAuthContent(
                         userCode = state.userCode,
                         verificationUriComplete = state.verificationUriComplete,
+                        isReconnecting = state.isReconnecting,
                     )
                 }
 
@@ -126,9 +128,10 @@ internal fun CloudSignInScreen(
 }
 
 @Composable
-private fun WaitingForAuthContent(
+private fun ColumnScope.WaitingForAuthContent(
     userCode: String,
     verificationUriComplete: String,
+    isReconnecting: Boolean,
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -167,7 +170,7 @@ private fun WaitingForAuthContent(
     CircularProgressIndicator(modifier = Modifier.size(32.dp))
 
     Text(
-        text = "等待瀏覽器授權中...",
+        text = if (isReconnecting) "連線中斷，重新連線中…" else "等待瀏覽器授權中...",
         style = HATextStyle.Body,
         color = LocalHAColorScheme.current.colorTextSecondary,
     )
@@ -175,7 +178,7 @@ private fun WaitingForAuthContent(
     HAAccentButton(
         text = "前往驗證",
         onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(verificationUriComplete))
+            val intent = Intent(Intent.ACTION_VIEW, verificationUriComplete.toUri())
             context.startActivity(intent)
         },
         modifier = Modifier.fillMaxWidth(),
@@ -183,11 +186,7 @@ private fun WaitingForAuthContent(
 }
 
 @Composable
-private fun ErrorContent(
-    message: String,
-    canRetry: Boolean,
-    onRetry: () -> Unit,
-) {
+private fun ColumnScope.ErrorContent(message: String, canRetry: Boolean, onRetry: () -> Unit) {
     Icon(
         imageVector = Icons.Default.ErrorOutline,
         contentDescription = null,
@@ -214,24 +213,38 @@ private fun ErrorContent(
 @Composable
 private fun CloudSignInWaitingPreview() {
     HAThemeForPreview {
-        Scaffold(
-            topBar = { HATopBar(onBackClick = {}) },
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = HADimens.SPACE4),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(HADimens.SPACE6),
-            ) {
-                Spacer(modifier = Modifier.weight(0.2f))
-                WaitingForAuthContent(
-                    userCode = "ABCD-1234",
-                    verificationUriComplete = "https://stg.woowtech.io/device?user_code=ABCD-1234",
-                )
-                Spacer(modifier = Modifier.weight(0.8f))
-            }
+        WaitingForAuthPreviewScaffold(isReconnecting = false)
+    }
+}
+
+@HAPreviews
+@Composable
+private fun CloudSignInReconnectingPreview() {
+    HAThemeForPreview {
+        WaitingForAuthPreviewScaffold(isReconnecting = true)
+    }
+}
+
+@Composable
+private fun WaitingForAuthPreviewScaffold(isReconnecting: Boolean) {
+    Scaffold(
+        topBar = { HATopBar(onBackClick = {}) },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = HADimens.SPACE4),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(HADimens.SPACE6),
+        ) {
+            Spacer(modifier = Modifier.weight(0.2f))
+            WaitingForAuthContent(
+                userCode = "ABCD-1234",
+                verificationUriComplete = "https://stg.woowtech.io/device?user_code=ABCD-1234",
+                isReconnecting = isReconnecting,
+            )
+            Spacer(modifier = Modifier.weight(0.8f))
         }
     }
 }

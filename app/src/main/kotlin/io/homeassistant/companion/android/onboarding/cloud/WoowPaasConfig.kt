@@ -12,21 +12,4 @@ internal object WoowPaasConfig {
     const val CLIENT_ID = BuildConfig.WOOW_PAAS_CLIENT_ID
     const val SCOPES = BuildConfig.WOOW_PAAS_SCOPES
     const val DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
-
-    /**
-     * Builds a full request URL by joining [BASE_URL] with [path], see [joinUrl] for the normalization
-     * rules applied.
-     */
-    fun resolveUrl(path: String): String = joinUrl(BASE_URL, path)
-}
-
-/**
- * Joins [base] and [path] into a single URL, normalizing slashes so a trailing slash on [base] or a
- * missing leading slash on [path] never produces a malformed URL such as a double slash or a missing
- * separator — including when [base] carries its own path segment rather than being a bare host.
- */
-internal fun joinUrl(base: String, path: String): String {
-    val trimmedBase = base.trimEnd('/')
-    val normalizedPath = if (path.startsWith('/')) path else "/$path"
-    return "$trimmedBase$normalizedPath"
 }

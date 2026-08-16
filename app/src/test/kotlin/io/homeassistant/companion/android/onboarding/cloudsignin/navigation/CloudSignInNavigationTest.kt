@@ -70,7 +70,7 @@ internal class CloudSignInNavigationTest : BaseOnboardingNavigationTest() {
             assertTrue(navController.currentBackStackEntry?.destination?.hasRoute<CloudSignInRoute>() == true)
             onNodeWithText(USER_CODE).assertIsDisplayed()
 
-            uiStateFlow.value = DeviceFlowUiState.Authorized(accessToken = "test-token")
+            uiStateFlow.value = DeviceFlowUiState.Authorized
             waitForIdle()
 
             assertTrue(navController.currentBackStackEntry?.destination?.hasRoute<CloudProvisionRoute>() == true)

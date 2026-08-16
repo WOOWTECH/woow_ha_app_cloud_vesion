@@ -90,7 +90,7 @@ class CloudSignInScreenTest {
     fun `Given Authorized state when displayed then shows success text`() {
         composeTestRule.setContent {
             CloudSignInContent(
-                uiState = DeviceFlowUiState.Authorized(accessToken = "token"),
+                uiState = DeviceFlowUiState.Authorized,
                 onBackClick = {},
                 onRetry = {},
             )

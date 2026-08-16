@@ -21,8 +21,11 @@ interface WoowPaasSessionRepository {
     /**
      * Replaces the stored session with [session].
      *
-     * @throws java.io.IOException when the storage refused the write; the previously stored session is
-     * then still intact
+     * @throws java.io.IOException when the storage refuses the write, leaving the previously stored session
+     * intact. The implementation shipped today never reports such a failure: it writes through shared
+     * preferences, whose asynchronous commit has no way to signal one. The contract is stated so callers
+     * are not written against that accident, because a storage that does report failures (an encrypted
+     * `DataStore`, for instance) would be a drop-in replacement.
      */
     suspend fun saveSession(session: WoowPaasSession)
 

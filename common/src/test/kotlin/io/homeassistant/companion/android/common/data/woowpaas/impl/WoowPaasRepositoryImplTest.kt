@@ -95,6 +95,9 @@ private const val RESPONSE_DELAY_SECONDS = 30L
 /** Upper bound on how long a request may take to reach the server before the test gives up. */
 private const val REQUEST_TIMEOUT_SECONDS = 10L
 
+/** Long enough for a rotation to still be in flight when the test cancels its caller. */
+private const val ROTATION_DELAY_MILLIS = 300L
+
 private const val DEVICE_CODE_BODY = """
     {
       "device_code": "device-code-1",
@@ -834,6 +837,31 @@ class WoowPaasRepositoryImplTest {
         val error = repository().provision().exceptionOrNull()
 
         assertInstanceOf(SessionExpiredException::class.java, error)
+    }
+
+    @Test
+    fun `Given the caller is cancelled while the session rotates then the new session is still stored`() = runTest {
+        sessionRepository.session = expiredSession(refreshToken = REFRESH_TOKEN)
+        // Slow enough that the caller is provably cancelled while the backend is answering the refresh.
+        server.enqueue(
+            MockResponse.Builder()
+                .code(200)
+                .body(ROTATED_TOKEN_BODY)
+                .bodyDelay(ROTATION_DELAY_MILLIS, TimeUnit.MILLISECONDS)
+                .build(),
+        )
+        val repository = repository()
+
+        val job = launch(Dispatchers.IO) { repository.provision() }
+        val request = withContext(Dispatchers.IO) { server.takeRequest(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) }
+        assertNotNull(request, "the refresh never reached the server, so nothing was cancelled mid rotation")
+        job.cancel()
+        job.join()
+
+        // The backend invalidated the old pair the moment it answered. Giving up on the answer would leave
+        // the account holding credentials that are already dead, and the user signing in again for nothing.
+        assertEquals("access-2", sessionRepository.session?.accessToken)
+        assertEquals("refresh-2", sessionRepository.session?.refreshToken)
     }
 
     @Test

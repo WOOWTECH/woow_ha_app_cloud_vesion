@@ -52,6 +52,25 @@ class WoowPaasSessionTest {
         assertFalse(session.canAuthenticateAt(NOW))
     }
 
+    @Test
+    fun `Given a session when describing it then no credential is spelled out`() {
+        val description = session(remainingLifetime = 60.minutes).toString()
+
+        // The generated representation of a data class is what reaches a log or a crash report the moment
+        // anything interpolates a session.
+        assertFalse(description.contains("access-1"), "the access token reached a loggable description")
+        assertFalse(description.contains("refresh-1"), "the refresh token reached a loggable description")
+    }
+
+    @Test
+    fun `Given a session without a refresh token when describing it then the absence stays visible`() {
+        val description = session(remainingLifetime = 60.minutes, refreshToken = null).toString()
+
+        // Masking must not turn "there is no refresh token" into "there is one, hidden": that difference is
+        // what tells whether the session can be rotated at all.
+        assertTrue(description.contains("refreshToken=null"))
+    }
+
     private fun session(remainingLifetime: Duration, refreshToken: String? = "refresh-1") = WoowPaasSession(
         accessToken = "access-1",
         refreshToken = refreshToken,

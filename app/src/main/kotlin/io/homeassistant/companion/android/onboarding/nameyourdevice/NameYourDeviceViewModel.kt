@@ -188,8 +188,10 @@ internal class NameYourDeviceViewModel @VisibleForTesting constructor(
      * afterwards would store credentials nothing reads. A server registered through a local address never
      * had such a session and this is then a no-op.
      *
-     * A storage failure is logged rather than propagated: the server is already registered, and failing the
-     * onboarding at this point would revert a registration that actually succeeded.
+     * A storage failure is logged rather than propagated. The storage in use today cannot report one, but
+     * the guard is deliberate rather than defensive clutter: this runs after the server is registered, so
+     * letting a failure out would revert a registration that actually succeeded, only to leave behind
+     * credentials nobody reads.
      */
     private suspend fun discardCloudSession() {
         try {

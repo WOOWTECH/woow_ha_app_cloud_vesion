@@ -48,12 +48,16 @@ internal class CloudProvisionViewModel @Inject constructor(
     private var isProvisionInProgress = false
 
     /**
-     * Checks that the sign in performed earlier is still usable, and reports that it is not.
+     * Checks that the sign in performed earlier left something worth trying, and reports when it did not.
      *
      * The credentials live in storage rather than in memory, so a screen rebuilt after the process was
-     * killed finds them again and the user carries on instead of signing in from scratch. Only a session
-     * that cannot authenticate any more, for instance one whose refresh token expired, sends the user back
-     * to the sign in screen.
+     * killed finds them again and the user carries on instead of signing in from scratch.
+     *
+     * The check is local and cannot be conclusive in the other direction: it only rules out the cases
+     * nothing can be done about, namely no stored session at all or an expired access token with no refresh
+     * token to replace it. A refresh token that the backend has since expired or revoked still looks fine
+     * from here and is only discovered when the first call tries to use it, which surfaces the same
+     * terminal error through [onProvisionClicked].
      */
     fun restoreSession() {
         viewModelScope.launch {

@@ -16,7 +16,6 @@ import io.homeassistant.companion.android.common.data.woowpaas.impl.entities.Dev
 import io.homeassistant.companion.android.common.data.woowpaas.impl.entities.ProvisionResponseDto
 import io.homeassistant.companion.android.common.data.woowpaas.impl.entities.StatusResponseDto
 import io.homeassistant.companion.android.common.data.woowpaas.impl.entities.TokenResponseDto
-import java.io.IOException
 import java.net.HttpURLConnection.HTTP_ACCEPTED
 import java.net.HttpURLConnection.HTTP_CONFLICT
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
@@ -31,6 +30,7 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -64,7 +64,6 @@ private const val MISSING_FIELDS_MESSAGE = "伺服器回應缺少必要欄位"
 private const val UNKNOWN_OAUTH_ERROR = "unknown_error"
 private const val SESSION_EXPIRED_MESSAGE = "登入已過期，請返回重新登入"
 private const val REFRESH_UNAVAILABLE_MESSAGE = "無法更新登入狀態，請稍後再試"
-private const val SESSION_NOT_STORED_MESSAGE = "無法儲存登入資訊，請重新登入"
 
 /**
  * The literal the backend sometimes sends instead of a JSON null for an absent string.
@@ -224,18 +223,12 @@ internal class WoowPaasRepositoryImpl @Inject constructor(
      * Persists the session carried by a successful token response.
      *
      * @return [TokenPollResult.Success] once the session is stored, or a terminal failure when the payload
-     * carried no usable session or when it could not be written down: a session that is not persisted
-     * would be lost on the next process death, which is exactly what the caller relies on.
+     * carried no usable session
      */
     private suspend fun persistIssuedSession(dto: TokenResponseDto): TokenPollResult {
         val session = dto.toSession(clock.now()) ?: return TokenPollResult.Failed(MISSING_FIELDS_MESSAGE)
-        return try {
-            sessionRepository.saveSession(session)
-            TokenPollResult.Success
-        } catch (e: IOException) {
-            Timber.e(e, "Could not store the WOOW PaaS session issued by the device flow")
-            TokenPollResult.Failed(SESSION_NOT_STORED_MESSAGE)
-        }
+        sessionRepository.saveSession(session)
+        return TokenPollResult.Success
     }
 
     /**
@@ -249,12 +242,12 @@ internal class WoowPaasRepositoryImpl @Inject constructor(
      */
     private suspend fun <T : Any> authenticated(call: suspend (accessToken: String) -> Response<T>): Response<T> {
         val stored = sessionRepository.currentSession() ?: throw SessionExpiredException(SESSION_EXPIRED_MESSAGE)
-        val session = if (stored.isAccessTokenUsableAt(clock.now())) stored else rotateSession(stored.accessToken)
+        val session = if (stored.isAccessTokenUsableAt(clock.now())) stored else rotateSession(stored)
 
         val response = call(session.accessToken)
         if (response.code() != HTTP_UNAUTHORIZED) return response
 
-        return call(rotateSession(session.accessToken).accessToken)
+        return call(rotateSession(session).accessToken)
     }
 
     /**
@@ -262,30 +255,38 @@ internal class WoowPaasRepositoryImpl @Inject constructor(
      *
      * Runs under a lock because the backend invalidates a refresh token as soon as it is used: a second
      * caller arriving here while a rotation is in flight waits, then reuses its result instead of spending
-     * a token that is already gone. [spentAccessToken] is how such a caller recognises that situation.
+     * a token that is already gone. Such a caller recognises the situation by finding a stored session that
+     * is no longer the [spent] one it came in with.
      *
-     * @param spentAccessToken the access token that turned out to be unusable
+     * @param spent the session that turned out to be unusable, compared as a whole rather than by its
+     * access token alone so a value reappearing could never be mistaken for the session never having moved
      * @throws SessionExpiredException when the session cannot be rotated, in which case it is dropped
      * @throws ApiException when the backend could not answer, in which case the session is kept so the
      * caller can try again later
      */
-    private suspend fun rotateSession(spentAccessToken: String): WoowPaasSession = refreshMutex.withLock {
+    private suspend fun rotateSession(spent: WoowPaasSession): WoowPaasSession = refreshMutex.withLock {
         val current = sessionRepository.currentSession() ?: throw SessionExpiredException(SESSION_EXPIRED_MESSAGE)
-        if (current.accessToken != spentAccessToken) return@withLock current
+        if (current != spent) return@withLock current
 
         val refreshToken = current.refreshToken ?: throw dropExpiredSession()
-        val response = service.refreshToken(
-            url = endpoint(WoowPaasEndpoints.TOKEN),
-            grantType = config.refreshTokenGrantType,
-            refreshToken = refreshToken,
-            clientId = config.clientId,
-        )
-        if (!response.isSuccessful) throw refreshRefusal(response.code())
+        // Cancellation is held off from the moment the refresh token is handed over until the session that
+        // replaces it is stored. The backend invalidates the old pair as soon as it answers, so giving up in
+        // between would leave the account holding credentials that are already dead, and the user would have
+        // to sign in again for no reason. The window is bounded by the call timeout of the HTTP client.
+        withContext(NonCancellable) {
+            val response = service.refreshToken(
+                url = endpoint(WoowPaasEndpoints.TOKEN),
+                grantType = config.refreshTokenGrantType,
+                refreshToken = refreshToken,
+                clientId = config.clientId,
+            )
+            if (!response.isSuccessful) throw refreshRefusal(response.code())
 
-        val session = response.body()?.toSession(clock.now())
-            ?: throw ApiException(response.code(), "$MISSING_FIELDS_MESSAGE (HTTP ${response.code()})")
-        sessionRepository.saveSession(session)
-        session
+            val session = response.body()?.toSession(clock.now())
+                ?: throw ApiException(response.code(), "$MISSING_FIELDS_MESSAGE (HTTP ${response.code()})")
+            sessionRepository.saveSession(session)
+            session
+        }
     }
 
     /**

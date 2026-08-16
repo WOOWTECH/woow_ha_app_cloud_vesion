@@ -34,6 +34,9 @@ private data class StoredSession(
  *
  * Reads and writes are serialized through a [Mutex] so a rotation happening while another caller reads
  * the session cannot be observed halfway through.
+ *
+ * Writes go through shared preferences, which commit asynchronously and report no failure, so this
+ * implementation never throws the `IOException` [WoowPaasSessionRepository.saveSession] allows for.
  */
 @OptIn(ExperimentalTime::class)
 internal class WoowPaasSessionRepositoryImpl @Inject constructor(

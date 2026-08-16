@@ -8,6 +8,7 @@ import io.homeassistant.companion.android.common.data.authentication.ServerRegis
 import io.homeassistant.companion.android.common.data.integration.DeviceRegistration
 import io.homeassistant.companion.android.common.data.integration.IntegrationRepository
 import io.homeassistant.companion.android.common.data.servers.ServerManager
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasSessionRepository
 import io.homeassistant.companion.android.common.util.AppVersion
 import io.homeassistant.companion.android.common.util.AppVersionProvider
 import io.homeassistant.companion.android.common.util.MessagingToken
@@ -58,6 +59,7 @@ class NameYourDeviceViewModelTest {
         return@MessagingTokenProvider MessagingToken("test_messaging_token")
     }
     private val integrationRepository: IntegrationRepository = mockk()
+    private val woowPaasSessionRepository: WoowPaasSessionRepository = mockk(relaxed = true)
 
     private lateinit var viewModel: NameYourDeviceViewModel
 
@@ -92,6 +94,7 @@ class NameYourDeviceViewModelTest {
             serverRegistrationRepository,
             appVersionProvider,
             messagingTokenProvider,
+            woowPaasSessionRepository,
             defaultName = DEFAULT_DEVICE_NAME,
         )
     }
@@ -185,6 +188,47 @@ class NameYourDeviceViewModelTest {
     }
 
     @Test
+    fun `Given successful add server when onSaveClick then the cloud session is discarded`() = runTest {
+        givenServerRegistrationSucceeds()
+
+        viewModel.onSaveClick()
+        advanceUntilIdle()
+
+        // The PaaS credentials only exist to obtain the address of a cloud instance: once the server
+        // belongs to the application nothing reads them any more.
+        coVerify(exactly = 1) { woowPaasSessionRepository.clearSession() }
+    }
+
+    @Test
+    fun `Given the registration fails when onSaveClick then the cloud session is kept`() = runTest {
+        coEvery {
+            serverRegistrationRepository.registerAuthorizationCode(
+                url = route.url,
+                authorizationCode = route.authCode,
+                allowInsecureConnection = null,
+            )
+        } returns null
+
+        viewModel.onSaveClick()
+        advanceUntilIdle()
+
+        // Dropping them here would force a new sign in even though the user may simply retry.
+        coVerify(exactly = 0) { woowPaasSessionRepository.clearSession() }
+    }
+
+    private fun givenServerRegistrationSucceeds(serverId: Int = 1) {
+        coEvery {
+            serverRegistrationRepository.registerAuthorizationCode(
+                url = route.url,
+                authorizationCode = route.authCode,
+                allowInsecureConnection = null,
+            )
+        } returns createTemporaryServer()
+        coEvery { serverManager.addServer(any()) } returns serverId
+        coEvery { integrationRepository.registerDevice(any()) } just Runs
+    }
+
+    @Test
     fun `Given custom deviceName and successful add server when onSaveClick then emits DeviceNameSaved event and registered with custom name and server activated`() = runTest {
         val customDeviceName = "Pixel"
         viewModel.onDeviceNameChange(customDeviceName)
@@ -244,6 +288,7 @@ class NameYourDeviceViewModelTest {
             serverRegistrationRepository,
             appVersionProvider,
             messagingTokenProvider,
+            woowPaasSessionRepository,
             defaultName = DEFAULT_DEVICE_NAME,
         )
 

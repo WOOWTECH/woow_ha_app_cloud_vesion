@@ -9,7 +9,6 @@ import androidx.navigation.NavOptions
 import androidx.navigation.navOptions
 import androidx.navigation.navigation
 import io.homeassistant.companion.android.launch.HAStartDestinationRoute
-import io.homeassistant.companion.android.onboarding.cloud.CloudOnboardingState
 import io.homeassistant.companion.android.onboarding.cloudchooser.navigation.CloudChooserRoute
 import io.homeassistant.companion.android.onboarding.cloudchooser.navigation.cloudChooserScreen
 import io.homeassistant.companion.android.onboarding.cloudprovision.navigation.cloudProvisionScreen
@@ -129,8 +128,6 @@ internal fun NavGraphBuilder.onboarding(
         else -> ConnectionRoute(urlToOnboard)
     }
 
-    val cloudState = CloudOnboardingState()
-
     navigation<OnboardingRoute>(startDestination = startDestination) {
         cloudChooserScreen(
             onLocalClick = { navController.navigateToWelcome() },
@@ -138,15 +135,9 @@ internal fun NavGraphBuilder.onboarding(
         )
         cloudSignInScreen(
             onBackClick = navController::popBackStack,
-            onAuthorized = { accessToken ->
-                cloudState.accessToken = accessToken
-                navController.navigateToCloudProvision()
-            },
+            onAuthorized = { navController.navigateToCloudProvision() },
         )
-        cloudProvisionScreen(
-            onBackClick = navController::popBackStack,
-            sharedState = cloudState,
-        )
+        cloudProvisionScreen(onBackClick = navController::popBackStack)
         welcomeScreen(
             onConnectClick = {
                 if (urlToOnboard.isNullOrEmpty()) {

@@ -58,6 +58,21 @@ internal interface WoowPaasService {
         @Field("client_id") clientId: String,
     ): Response<TokenResponseDto>
 
+    /**
+     * Exchanges a refresh token for a brand new session (RFC 6749 §6).
+     *
+     * The client is a public one: sending a client secret here is answered with a 401, so the body carries
+     * nothing but the grant type, the refresh token and the client identifier.
+     */
+    @FormUrlEncoded
+    @POST
+    suspend fun refreshToken(
+        @Url url: HttpUrl,
+        @Field("grant_type") grantType: String,
+        @Field("refresh_token") refreshToken: String,
+        @Field("client_id") clientId: String,
+    ): Response<TokenResponseDto>
+
     @POST
     suspend fun provision(
         @Url url: HttpUrl,

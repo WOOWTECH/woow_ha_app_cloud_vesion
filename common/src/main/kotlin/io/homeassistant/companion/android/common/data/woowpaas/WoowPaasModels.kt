@@ -20,19 +20,6 @@ data class DeviceCodeResponse(
 )
 
 /**
- * The credentials issued once the user authorized the device.
- *
- * @param refreshToken null when the backend does not hand out refresh tokens for this client
- */
-data class TokenResponse(
-    val accessToken: String,
-    val tokenType: String,
-    val expiresIn: Int,
-    val scope: String,
-    val refreshToken: String?,
-)
-
-/**
  * The answer to a provisioning request.
  *
  * @param haUrl the URL of the instance, only present once [status] is [ProvisionStatus.Ready]

@@ -5,15 +5,18 @@ import io.homeassistant.companion.android.common.data.woowpaas.DeviceCodeRespons
 import io.homeassistant.companion.android.common.data.woowpaas.HTTP_CODE_UNKNOWN
 import io.homeassistant.companion.android.common.data.woowpaas.ProvisionResponse
 import io.homeassistant.companion.android.common.data.woowpaas.ProvisionStatus
+import io.homeassistant.companion.android.common.data.woowpaas.SessionExpiredException
 import io.homeassistant.companion.android.common.data.woowpaas.StatusResponse
 import io.homeassistant.companion.android.common.data.woowpaas.TokenPollResult
-import io.homeassistant.companion.android.common.data.woowpaas.TokenResponse
 import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasApiConfig
 import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasSession
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasSessionRepository
 import io.homeassistant.companion.android.common.data.woowpaas.impl.entities.DeviceCodeResponseDto
 import io.homeassistant.companion.android.common.data.woowpaas.impl.entities.ProvisionResponseDto
 import io.homeassistant.companion.android.common.data.woowpaas.impl.entities.StatusResponseDto
 import io.homeassistant.companion.android.common.data.woowpaas.impl.entities.TokenResponseDto
+import java.io.IOException
 import java.net.HttpURLConnection.HTTP_ACCEPTED
 import java.net.HttpURLConnection.HTTP_CONFLICT
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
@@ -22,8 +25,14 @@ import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import java.net.HttpURLConnection.HTTP_UNAVAILABLE
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import okhttp3.FormBody
@@ -53,6 +62,9 @@ private const val BEARER_PREFIX = "Bearer "
 internal const val MALFORMED_BODY_MESSAGE = "伺服器回應格式錯誤"
 private const val MISSING_FIELDS_MESSAGE = "伺服器回應缺少必要欄位"
 private const val UNKNOWN_OAUTH_ERROR = "unknown_error"
+private const val SESSION_EXPIRED_MESSAGE = "登入已過期，請返回重新登入"
+private const val REFRESH_UNAVAILABLE_MESSAGE = "無法更新登入狀態，請稍後再試"
+private const val SESSION_NOT_STORED_MESSAGE = "無法儲存登入資訊，請重新登入"
 
 /**
  * The literal the backend sometimes sends instead of a JSON null for an absent string.
@@ -66,13 +78,25 @@ private const val NULL_LITERAL = "null"
  * and this repository is injected into view models that are constructed on the main thread. Every
  * function switches to [Dispatchers.IO] before touching the network, so callers do not have to.
  *
+ * The authenticated calls read their credentials from [sessionRepository] and refresh them when needed.
+ * Refreshing is serialized: the backend invalidates a refresh token the moment it is used, so two calls
+ * spending the same one would leave the account without a session at all.
+ *
  * @param config the environment this instance talks to; its `baseUrl` may carry a path prefix, in which
  * case every endpoint is appended to it.
+ * @param sessionRepository where the credentials issued by the device flow are kept
+ * @param clock used to tell whether an access token is still worth sending
  */
-internal class WoowPaasRepositoryImpl @Inject constructor(private val config: WoowPaasApiConfig) :
-    WoowPaasRepository {
+@OptIn(ExperimentalTime::class)
+internal class WoowPaasRepositoryImpl @Inject constructor(
+    private val config: WoowPaasApiConfig,
+    private val sessionRepository: WoowPaasSessionRepository,
+    private val clock: Clock,
+) : WoowPaasRepository {
 
     private val baseUrl: HttpUrl by lazy { config.baseUrl.toHttpUrl() }
+
+    private val refreshMutex = Mutex()
 
     private val service: WoowPaasService by lazy {
         Retrofit.Builder()
@@ -116,7 +140,12 @@ internal class WoowPaasRepositoryImpl @Inject constructor(private val config: Wo
                     clientId = config.clientId,
                 )
                 if (response.isSuccessful) {
-                    response.body()?.toTokenPollResult() ?: TokenPollResult.TransientError(MALFORMED_BODY_MESSAGE)
+                    val body = response.body()
+                    if (body == null) {
+                        TokenPollResult.TransientError(MALFORMED_BODY_MESSAGE)
+                    } else {
+                        persistIssuedSession(body)
+                    }
                 } else {
                     val dto = decodeTokenError(response.errorBodyText())
                     classifyTokenError(
@@ -136,15 +165,20 @@ internal class WoowPaasRepositoryImpl @Inject constructor(private val config: Wo
             }
         }
 
-    override suspend fun provision(accessToken: String): Result<ProvisionResponse> = withContext(Dispatchers.IO) {
+    override suspend fun provision(): Result<ProvisionResponse> = withContext(Dispatchers.IO) {
         runCatchingApi {
-            val response = service.provision(
-                url = endpoint(WoowPaasEndpoints.PROVISION),
-                authorization = BEARER_PREFIX + accessToken,
-                body = FormBody.Builder().build(),
-            )
-            val dto = response.bodyOrErrorBody(::decodeProvisionError)
+            val response = authenticated { accessToken ->
+                service.provision(
+                    url = endpoint(WoowPaasEndpoints.PROVISION),
+                    authorization = BEARER_PREFIX + accessToken,
+                    body = FormBody.Builder().build(),
+                )
+            }
             val code = response.code()
+            // Decided before the body is looked at: whatever a refused answer carries, the credentials were
+            // already refreshed and replayed by then, so nothing but a new sign in helps.
+            if (code == HTTP_UNAUTHORIZED) throw dropExpiredSession()
+            val dto = response.bodyOrErrorBody(::decodeProvisionError)
 
             when (code) {
                 HTTP_OK, HTTP_ACCEPTED -> ProvisionResponse(
@@ -156,7 +190,6 @@ internal class WoowPaasRepositoryImpl @Inject constructor(private val config: Wo
                     status = dto.status.toProvisionStatus(code),
                     error = dto.error.orApiNull(),
                 )
-                HTTP_UNAUTHORIZED -> throw ApiException(code, "登入已過期，請返回重新登入")
                 HTTP_FORBIDDEN -> throw ApiException(code, "權限不足（缺少 ha:provision scope）")
                 HTTP_UNAVAILABLE -> throw ApiException(code, "服務尚未開放，請稍後再試")
                 else -> throw ApiException(code, dto.error.orApiNull() ?: "未知錯誤 (HTTP $code)")
@@ -164,14 +197,17 @@ internal class WoowPaasRepositoryImpl @Inject constructor(private val config: Wo
         }
     }
 
-    override suspend fun getStatus(accessToken: String): Result<StatusResponse> = withContext(Dispatchers.IO) {
+    override suspend fun getStatus(): Result<StatusResponse> = withContext(Dispatchers.IO) {
         runCatchingApi {
-            val response = service.getStatus(
-                url = endpoint(WoowPaasEndpoints.STATUS),
-                authorization = BEARER_PREFIX + accessToken,
-            )
-            val dto = response.bodyOrErrorBody(::decodeStatusError)
+            val response = authenticated { accessToken ->
+                service.getStatus(
+                    url = endpoint(WoowPaasEndpoints.STATUS),
+                    authorization = BEARER_PREFIX + accessToken,
+                )
+            }
             val code = response.code()
+            if (code == HTTP_UNAUTHORIZED) throw dropExpiredSession()
+            val dto = response.bodyOrErrorBody(::decodeStatusError)
 
             if (!response.isSuccessful) {
                 throw ApiException(code, dto.error.orApiNull() ?: "查詢狀態失敗 (HTTP $code)")
@@ -182,6 +218,93 @@ internal class WoowPaasRepositoryImpl @Inject constructor(private val config: Wo
                 error = dto.error.orApiNull(),
             )
         }
+    }
+
+    /**
+     * Persists the session carried by a successful token response.
+     *
+     * @return [TokenPollResult.Success] once the session is stored, or a terminal failure when the payload
+     * carried no usable session or when it could not be written down: a session that is not persisted
+     * would be lost on the next process death, which is exactly what the caller relies on.
+     */
+    private suspend fun persistIssuedSession(dto: TokenResponseDto): TokenPollResult {
+        val session = dto.toSession(clock.now()) ?: return TokenPollResult.Failed(MISSING_FIELDS_MESSAGE)
+        return try {
+            sessionRepository.saveSession(session)
+            TokenPollResult.Success
+        } catch (e: IOException) {
+            Timber.e(e, "Could not store the WOOW PaaS session issued by the device flow")
+            TokenPollResult.Failed(SESSION_NOT_STORED_MESSAGE)
+        }
+    }
+
+    /**
+     * Runs [call] with the access token of the stored session, refreshing that session when needed.
+     *
+     * The session is rotated before the call when its access token is about to expire, and once more when
+     * the backend refuses a token this client believed valid. The call is replayed a single time: a second
+     * refusal means the account lost its session for good.
+     *
+     * @throws SessionExpiredException when no stored session can authenticate any more
+     */
+    private suspend fun <T : Any> authenticated(call: suspend (accessToken: String) -> Response<T>): Response<T> {
+        val stored = sessionRepository.currentSession() ?: throw SessionExpiredException(SESSION_EXPIRED_MESSAGE)
+        val session = if (stored.isAccessTokenUsableAt(clock.now())) stored else rotateSession(stored.accessToken)
+
+        val response = call(session.accessToken)
+        if (response.code() != HTTP_UNAUTHORIZED) return response
+
+        return call(rotateSession(session.accessToken).accessToken)
+    }
+
+    /**
+     * Exchanges the refresh token of the stored session for a brand new one and persists it.
+     *
+     * Runs under a lock because the backend invalidates a refresh token as soon as it is used: a second
+     * caller arriving here while a rotation is in flight waits, then reuses its result instead of spending
+     * a token that is already gone. [spentAccessToken] is how such a caller recognises that situation.
+     *
+     * @param spentAccessToken the access token that turned out to be unusable
+     * @throws SessionExpiredException when the session cannot be rotated, in which case it is dropped
+     * @throws ApiException when the backend could not answer, in which case the session is kept so the
+     * caller can try again later
+     */
+    private suspend fun rotateSession(spentAccessToken: String): WoowPaasSession = refreshMutex.withLock {
+        val current = sessionRepository.currentSession() ?: throw SessionExpiredException(SESSION_EXPIRED_MESSAGE)
+        if (current.accessToken != spentAccessToken) return@withLock current
+
+        val refreshToken = current.refreshToken ?: throw dropExpiredSession()
+        val response = service.refreshToken(
+            url = endpoint(WoowPaasEndpoints.TOKEN),
+            grantType = config.refreshTokenGrantType,
+            refreshToken = refreshToken,
+            clientId = config.clientId,
+        )
+        if (!response.isSuccessful) throw refreshRefusal(response.code())
+
+        val session = response.body()?.toSession(clock.now())
+            ?: throw ApiException(response.code(), "$MISSING_FIELDS_MESSAGE (HTTP ${response.code()})")
+        sessionRepository.saveSession(session)
+        session
+    }
+
+    /**
+     * Tells apart a refresh the backend could not serve from one it refused.
+     *
+     * A server side failure says nothing about the credentials, so the session is kept and the caller is
+     * free to try again; anything else means the refresh token is spent or revoked (`invalid_grant`) and
+     * only a new device flow recovers.
+     */
+    private suspend fun refreshRefusal(httpCode: Int): Exception = if (httpCode in HTTP_SERVER_ERROR_RANGE) {
+        ApiException(httpCode, REFRESH_UNAVAILABLE_MESSAGE)
+    } else {
+        dropExpiredSession()
+    }
+
+    /** Drops the session that cannot authenticate any more and reports that a new device flow is needed. */
+    private suspend fun dropExpiredSession(): SessionExpiredException {
+        sessionRepository.clearSession()
+        return SessionExpiredException(SESSION_EXPIRED_MESSAGE)
     }
 
     /** Appends [segments] to the configured base URL, keeping any path prefix it already carries. */
@@ -278,15 +401,18 @@ private fun DeviceCodeResponseDto.toDeviceCodeResponse(httpCode: Int): DeviceCod
 }
 
 /**
- * Maps a successful token payload, reporting a terminal failure when the backend answered a 2xx that does
- * not actually carry a token.
+ * Turns a token payload into the session to store, or null when the backend answered a 2xx that does not
+ * actually carry usable credentials.
+ *
+ * Only the two fields the application depends on are required: the token to send and how long it lasts.
+ * `token_type` and `scope` are echoed back by the backend but nothing branches on them, so a payload
+ * missing them still produces a working session.
+ *
+ * @param issuedAt when the answer was received, from which the expiry of the access token is computed
  */
-private fun TokenResponseDto.toTokenPollResult(): TokenPollResult = TokenPollResult.Success(
-    TokenResponse(
-        accessToken = accessToken ?: return TokenPollResult.Failed(MISSING_FIELDS_MESSAGE),
-        tokenType = tokenType ?: return TokenPollResult.Failed(MISSING_FIELDS_MESSAGE),
-        expiresIn = expiresIn ?: return TokenPollResult.Failed(MISSING_FIELDS_MESSAGE),
-        scope = scope ?: return TokenPollResult.Failed(MISSING_FIELDS_MESSAGE),
-        refreshToken = refreshToken.orApiNull(),
-    ),
+@OptIn(ExperimentalTime::class)
+private fun TokenResponseDto.toSession(issuedAt: Instant): WoowPaasSession? = WoowPaasSession(
+    accessToken = accessToken.orApiNull() ?: return null,
+    refreshToken = refreshToken.orApiNull(),
+    accessTokenExpiresAt = issuedAt + (expiresIn ?: return null).seconds,
 )

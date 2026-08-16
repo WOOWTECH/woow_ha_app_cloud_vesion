@@ -5,9 +5,12 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.homeassistant.companion.android.common.data.woowpaas.ApiException
 import io.homeassistant.companion.android.common.data.woowpaas.ProvisionStatus
+import io.homeassistant.companion.android.common.data.woowpaas.SessionExpiredException
 import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
-import io.homeassistant.companion.android.onboarding.cloud.CloudOnboardingState
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasSessionRepository
 import java.io.IOException
+import java.net.HttpURLConnection.HTTP_FORBIDDEN
+import java.net.HttpURLConnection.HTTP_UNAVAILABLE
 import javax.inject.Inject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -23,14 +26,20 @@ private const val INITIAL_POLL_INTERVAL_MS = 5_000L
 private const val MAX_POLL_INTERVAL_MS = 30_000L
 private val POLL_TIMEOUT = 10.minutes
 
+private const val SESSION_EXPIRED_MESSAGE = "登入已過期，請返回重新登入"
+private const val SERVICE_UNAVAILABLE_MESSAGE = "服務尚未開放，請稍後再試"
+private const val MISSING_SCOPE_MESSAGE = "權限不足（缺少 ha:provision scope）"
+private const val PROVISION_FAILED_MESSAGE = "開通失敗"
+private const val STATUS_QUERY_FAILED_MESSAGE = "查詢狀態失敗"
+private const val MISSING_URL_MESSAGE = "伺服器回報就緒但未提供網址"
+
 @OptIn(ExperimentalTime::class)
 @HiltViewModel
 internal class CloudProvisionViewModel @Inject constructor(
     private val repository: WoowPaasRepository,
+    private val sessionRepository: WoowPaasSessionRepository,
     private val clock: Clock,
 ) : ViewModel() {
-
-    private var accessToken: String? = null
 
     private val _uiState = MutableStateFlow<ProvisionUiState>(ProvisionUiState.Idle)
     val uiState = _uiState.asStateFlow()
@@ -38,18 +47,24 @@ internal class CloudProvisionViewModel @Inject constructor(
     private var pollJob: Job? = null
     private var isProvisionInProgress = false
 
-    fun setAccessToken(sharedState: CloudOnboardingState) {
-        accessToken = sharedState.accessToken
-        if (accessToken == null) {
-            _uiState.value = ProvisionUiState.Error(
-                message = "登入已過期，請返回重新登入",
-                canRetry = false,
-            )
+    /**
+     * Checks that the sign in performed earlier is still usable, and reports that it is not.
+     *
+     * The credentials live in storage rather than in memory, so a screen rebuilt after the process was
+     * killed finds them again and the user carries on instead of signing in from scratch. Only a session
+     * that cannot authenticate any more, for instance one whose refresh token expired, sends the user back
+     * to the sign in screen.
+     */
+    fun restoreSession() {
+        viewModelScope.launch {
+            val session = sessionRepository.currentSession()
+            if (session?.canAuthenticateAt(clock.now()) != true) {
+                _uiState.value = ProvisionUiState.Error(message = SESSION_EXPIRED_MESSAGE, canRetry = false)
+            }
         }
     }
 
     fun onProvisionClicked() {
-        val token = accessToken ?: return
         if (isProvisionInProgress) return
         isProvisionInProgress = true
 
@@ -57,22 +72,14 @@ internal class CloudProvisionViewModel @Inject constructor(
             try {
                 _uiState.value = ProvisionUiState.Provisioning
 
-                repository.provision(token).fold(
+                repository.provision().fold(
                     onSuccess = { response ->
                         when (val status = response.status) {
                             ProvisionStatus.Ready -> {
-                                val url = response.haUrl
-                                if (url != null) {
-                                    _uiState.value = ProvisionUiState.Ready(url)
-                                } else {
-                                    _uiState.value = ProvisionUiState.Error(
-                                        message = "伺服器回報就緒但未提供網址",
-                                        canRetry = true,
-                                    )
-                                }
+                                _uiState.value = readyStateFor(response.haUrl)
                             }
                             ProvisionStatus.Provisioning -> {
-                                startStatusPolling(token)
+                                startStatusPolling()
                             }
                             ProvisionStatus.Suspended -> {
                                 _uiState.value = ProvisionUiState.Suspended
@@ -93,19 +100,7 @@ internal class CloudProvisionViewModel @Inject constructor(
                         }
                     },
                     onFailure = { error ->
-                        val message = when {
-                            error is ApiException && error.code == 503 ->
-                                "服務尚未開放，請稍後再試"
-                            error is ApiException && error.code == 401 ->
-                                "登入已過期，請返回重新登入"
-                            error is ApiException && error.code == 403 ->
-                                "權限不足（缺少 ha:provision scope）"
-                            else -> error.message ?: "開通失敗"
-                        }
-                        _uiState.value = ProvisionUiState.Error(
-                            message = message,
-                            canRetry = error !is ApiException || error.code != 401,
-                        )
+                        _uiState.value = errorStateFor(error, fallbackMessage = PROVISION_FAILED_MESSAGE)
                     },
                 )
             } finally {
@@ -121,9 +116,10 @@ internal class CloudProvisionViewModel @Inject constructor(
      *
      * Transient network failures (an [IOException] such as a socket timeout or DNS hiccup) do not abort the
      * wait: the loop keeps polling with an exponential backoff, bounded by [POLL_TIMEOUT] measured against the
-     * injected [Clock]. Only terminal failures (e.g. an [ApiException] carrying a 401/403) stop the flow.
+     * injected [Clock]. Only terminal failures stop the flow, and the repository refreshes the credentials on
+     * its own, so an access token expiring mid wait is not one of them.
      */
-    private fun startStatusPolling(token: String) {
+    private fun startStatusPolling() {
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
             var interval = INITIAL_POLL_INTERVAL_MS
@@ -141,19 +137,11 @@ internal class CloudProvisionViewModel @Inject constructor(
                         return@launch
                     }
 
-                    repository.getStatus(token).fold(
+                    repository.getStatus().fold(
                         onSuccess = { response ->
                             when (val status = response.status) {
                                 ProvisionStatus.Ready -> {
-                                    val url = response.haUrl
-                                    if (url != null) {
-                                        _uiState.value = ProvisionUiState.Ready(url)
-                                    } else {
-                                        _uiState.value = ProvisionUiState.Error(
-                                            message = "伺服器回報就緒但未提供網址",
-                                            canRetry = true,
-                                        )
-                                    }
+                                    _uiState.value = readyStateFor(response.haUrl)
                                     return@launch
                                 }
                                 ProvisionStatus.Provisioning -> {
@@ -195,12 +183,10 @@ internal class CloudProvisionViewModel @Inject constructor(
                                 error is IOException -> {
                                     interval = (interval * 2).coerceAtMost(MAX_POLL_INTERVAL_MS)
                                 }
-                                // Terminal failure (e.g. ApiException 401/403): stop
+                                // Terminal failure: stop
                                 else -> {
-                                    _uiState.value = ProvisionUiState.Error(
-                                        message = error.message ?: "查詢狀態失敗",
-                                        canRetry = true,
-                                    )
+                                    _uiState.value =
+                                        errorStateFor(error, fallbackMessage = STATUS_QUERY_FAILED_MESSAGE)
                                     return@launch
                                 }
                             }
@@ -211,6 +197,29 @@ internal class CloudProvisionViewModel @Inject constructor(
                 isProvisionInProgress = false
             }
         }
+    }
+
+    private fun readyStateFor(haUrl: String?): ProvisionUiState = if (haUrl != null) {
+        ProvisionUiState.Ready(haUrl)
+    } else {
+        ProvisionUiState.Error(message = MISSING_URL_MESSAGE, canRetry = true)
+    }
+
+    /**
+     * Turns a failure into the screen state describing it.
+     *
+     * A [SessionExpiredException] is the only case that cannot be retried: the repository already tried to
+     * refresh the credentials and the backend refused, so the user has to sign in again. Everything else,
+     * including a backend that could not be reached while refreshing, is worth another attempt.
+     */
+    private fun errorStateFor(error: Throwable, fallbackMessage: String): ProvisionUiState.Error {
+        val message = when {
+            error is SessionExpiredException -> SESSION_EXPIRED_MESSAGE
+            error is ApiException && error.code == HTTP_UNAVAILABLE -> SERVICE_UNAVAILABLE_MESSAGE
+            error is ApiException && error.code == HTTP_FORBIDDEN -> MISSING_SCOPE_MESSAGE
+            else -> error.message ?: fallbackMessage
+        }
+        return ProvisionUiState.Error(message = message, canRetry = error !is SessionExpiredException)
     }
 }
 

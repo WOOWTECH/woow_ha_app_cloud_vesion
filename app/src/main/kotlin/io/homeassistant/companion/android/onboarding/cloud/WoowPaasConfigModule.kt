@@ -24,5 +24,6 @@ internal object WoowPaasConfigModule {
         clientId = WoowPaasConfig.CLIENT_ID,
         scopes = WoowPaasConfig.SCOPES,
         deviceCodeGrantType = WoowPaasConfig.DEVICE_CODE_GRANT_TYPE,
+        refreshTokenGrantType = WoowPaasConfig.REFRESH_TOKEN_GRANT_TYPE,
     )
 }

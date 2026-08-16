@@ -3,24 +3,38 @@ package io.homeassistant.companion.android.common.data.woowpaas.impl
 import io.homeassistant.companion.android.common.data.woowpaas.ApiException
 import io.homeassistant.companion.android.common.data.woowpaas.HTTP_CODE_UNKNOWN
 import io.homeassistant.companion.android.common.data.woowpaas.ProvisionStatus
+import io.homeassistant.companion.android.common.data.woowpaas.SessionExpiredException
 import io.homeassistant.companion.android.common.data.woowpaas.TokenPollResult
 import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasApiConfig
 import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasSession
+import io.homeassistant.companion.android.testing.unit.FakeClock
 import java.io.IOException
 import java.net.URLDecoder
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -34,7 +48,46 @@ import org.junit.jupiter.params.provider.ValueSource
 private const val CLIENT_ID = "woow-ha-app"
 private const val SCOPES = "ha:provision workspace:read smarthome:read"
 private const val GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
+private const val REFRESH_GRANT_TYPE = "refresh_token"
 private const val ACCESS_TOKEN = "token-123"
+private const val REFRESH_TOKEN = "refresh-123"
+private const val SESSION_EXPIRED_MESSAGE = "登入已過期，請返回重新登入"
+
+/** The instant every test starts at, so token lifetimes are computed against a known reference. */
+private val NOW = Instant.fromEpochMilliseconds(0)
+
+private val ACCESS_TOKEN_LIFETIME = 1.hours
+
+private const val TOKEN_PATH = "oauth2/token"
+
+/** How long a request may wait for its sibling before the concurrency test gives up instead of hanging. */
+private const val BARRIER_TIMEOUT_SECONDS = 10L
+
+/**
+ * Refuses the first call of every API endpoint, and only once both of them have been refused, so two calls
+ * really are holding a token the backend just rejected at the same time.
+ *
+ * Counting the token endpoint calls in [refreshCount] is what tells whether the two callers raced to spend
+ * the same refresh token or whether one of them reused the session the other obtained.
+ */
+private class RefusingOnceDispatcher(private val refreshCount: AtomicInteger) : Dispatcher() {
+
+    private val bothRefused = CyclicBarrier(2)
+    private val alreadyRefused = ConcurrentHashMap.newKeySet<String>()
+
+    override fun dispatch(request: RecordedRequest): MockResponse {
+        val path = request.url.encodedPath
+        if (path.endsWith(TOKEN_PATH)) {
+            refreshCount.incrementAndGet()
+            return MockResponse(code = 200, body = ROTATED_TOKEN_BODY)
+        }
+        if (alreadyRefused.add(path)) {
+            bothRefused.await(BARRIER_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            return MockResponse(code = 401, body = """{"error":"invalid_token"}""")
+        }
+        return MockResponse(code = 202, body = """{"status":"provisioning"}""")
+    }
+}
 
 /** Long enough that a call cannot finish before the test cancels it. */
 private const val RESPONSE_DELAY_SECONDS = 30L
@@ -62,13 +115,50 @@ private const val TOKEN_BODY = """
     }
 """
 
+private const val TOKEN_BODY_WITH_REFRESH = """
+    {
+      "access_token": "access-1",
+      "token_type": "Bearer",
+      "expires_in": 3600,
+      "scope": "ha:provision",
+      "refresh_token": "refresh-1"
+    }
+"""
+
+/** What the backend answers to a refresh: a brand new pair, the previous one being invalidated. */
+private const val ROTATED_TOKEN_BODY = """
+    {
+      "access_token": "access-2",
+      "token_type": "Bearer",
+      "expires_in": 3600,
+      "scope": "ha:provision",
+      "refresh_token": "refresh-2"
+    }
+"""
+
 /**
  * Exercises [WoowPaasRepositoryImpl] against a real HTTP server so URL building, request shape,
  * deserialization and every status code branch are covered end to end.
  */
+@OptIn(ExperimentalTime::class)
 class WoowPaasRepositoryImplTest {
 
     private lateinit var server: MockWebServer
+
+    private val clock = FakeClock().apply { currentInstant = NOW }
+
+    /**
+     * The starting point of most tests: a usable access token without a refresh token, so a call that is
+     * refused reports the session is gone instead of reaching the refresh endpoint. The tests about
+     * refreshing seed a session of their own.
+     */
+    private val sessionRepository = FakeWoowPaasSessionRepository(
+        WoowPaasSession(
+            accessToken = ACCESS_TOKEN,
+            refreshToken = null,
+            accessTokenExpiresAt = NOW + ACCESS_TOKEN_LIFETIME,
+        ),
+    )
 
     @BeforeEach
     fun setUp() {
@@ -113,7 +203,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a base URL with a path prefix when provisioning then the prefix is kept`() = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"ready","ha_url":"https://ha.example.com"}"""))
 
-        repository("/woow").provision(ACCESS_TOKEN)
+        repository("/woow").provision()
 
         assertEquals("/woow/api/ha-paas/provision", server.takeRequest().url.encodedPath)
     }
@@ -122,7 +212,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a base URL with a path prefix when querying the status then the prefix is kept`() = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"provisioning"}"""))
 
-        repository("/woow").getStatus(ACCESS_TOKEN)
+        repository("/woow").getStatus()
 
         assertEquals("/woow/api/ha-paas/status", server.takeRequest().url.encodedPath)
     }
@@ -218,7 +308,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given an unreadable body on a success when provisioning then the status code is unknown`() = runTest {
         server.enqueue(MockResponse(code = 200, body = "not json at all"))
 
-        val error = assertInstanceOf(ApiException::class.java, repository().provision(ACCESS_TOKEN).exceptionOrNull())
+        val error = assertInstanceOf(ApiException::class.java, repository().provision().exceptionOrNull())
 
         assertEquals(HTTP_CODE_UNKNOWN, error.code)
         assertEquals("伺服器回應格式錯誤", error.message)
@@ -228,7 +318,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given an unreadable body on a success when querying the status then the status code is unknown`() = runTest {
         server.enqueue(MockResponse(code = 200, body = "not json at all"))
 
-        val error = assertInstanceOf(ApiException::class.java, repository().getStatus(ACCESS_TOKEN).exceptionOrNull())
+        val error = assertInstanceOf(ApiException::class.java, repository().getStatus().exceptionOrNull())
 
         assertEquals(HTTP_CODE_UNKNOWN, error.code)
         assertEquals("伺服器回應格式錯誤", error.message)
@@ -257,12 +347,12 @@ class WoowPaasRepositoryImplTest {
 
     @Test
     fun `Given the caller is cancelled when provisioning then no result is produced`() = runTest {
-        assertCancellationIsNotSwallowed { provision(ACCESS_TOKEN) }
+        assertCancellationIsNotSwallowed { provision() }
     }
 
     @Test
     fun `Given the caller is cancelled when querying the status then no result is produced`() = runTest {
-        assertCancellationIsNotSwallowed { getStatus(ACCESS_TOKEN) }
+        assertCancellationIsNotSwallowed { getStatus() }
     }
 
     // endregion
@@ -270,17 +360,39 @@ class WoowPaasRepositoryImplTest {
     // region pollToken
 
     @Test
-    fun `Given an issued token when polling then the result is Success`() = runTest {
+    fun `Given an issued token when polling then the session is persisted`() = runTest {
         server.enqueue(MockResponse(code = 200, body = TOKEN_BODY))
 
         val result = repository().pollToken(deviceCode = "device-code-1", currentInterval = 5)
 
-        val token = assertInstanceOf(TokenPollResult.Success::class.java, result).token
-        assertEquals("access-1", token.accessToken)
-        assertEquals("Bearer", token.tokenType)
-        assertEquals(3600, token.expiresIn)
-        assertEquals("ha:provision", token.scope)
-        assertNull(token.refreshToken)
+        assertEquals(TokenPollResult.Success, result)
+        assertEquals(
+            WoowPaasSession(
+                accessToken = "access-1",
+                refreshToken = null,
+                accessTokenExpiresAt = NOW + 3600.seconds,
+            ),
+            sessionRepository.session,
+        )
+    }
+
+    @Test
+    fun `Given an issued token carrying a refresh token when polling then it is persisted too`() = runTest {
+        server.enqueue(MockResponse(code = 200, body = TOKEN_BODY_WITH_REFRESH))
+
+        repository().pollToken(deviceCode = "device-code-1", currentInterval = 5)
+
+        assertEquals("refresh-1", sessionRepository.session?.refreshToken)
+    }
+
+    @Test
+    fun `Given a device flow that has not completed when polling then the stored session is left alone`() = runTest {
+        server.enqueue(MockResponse(code = 400, body = """{"error":"authorization_pending"}"""))
+        val previous = sessionRepository.session
+
+        repository().pollToken(deviceCode = "device-code-1", currentInterval = 5)
+
+        assertEquals(previous, sessionRepository.session)
     }
 
     @Test
@@ -369,7 +481,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a running instance when provisioning then the URL is returned`() = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"ready","ha_url":"https://ha.example.com"}"""))
 
-        val response = repository().provision(ACCESS_TOKEN).getOrThrow()
+        val response = repository().provision().getOrThrow()
 
         assertEquals(ProvisionStatus.Ready, response.status)
         assertEquals("https://ha.example.com", response.haUrl)
@@ -379,7 +491,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given an instance being created when provisioning then the status is Provisioning`() = runTest {
         server.enqueue(MockResponse(code = 202, body = """{"status":"provisioning"}"""))
 
-        val response = repository().provision(ACCESS_TOKEN).getOrThrow()
+        val response = repository().provision().getOrThrow()
 
         assertEquals(ProvisionStatus.Provisioning, response.status)
         assertNull(response.haUrl)
@@ -392,7 +504,7 @@ class WoowPaasRepositoryImplTest {
     ) = runTest {
         server.enqueue(MockResponse(code = 409, body = """{"status":"$rawStatus","error":"instance is $rawStatus"}"""))
 
-        val response = repository().provision(ACCESS_TOKEN).getOrThrow()
+        val response = repository().provision().getOrThrow()
 
         assertEquals(rawStatus, response.status.rawValue)
         assertEquals("instance is $rawStatus", response.error)
@@ -410,7 +522,7 @@ class WoowPaasRepositoryImplTest {
     ) = runTest {
         server.enqueue(MockResponse(code = code, body = """{"error":"ignored"}"""))
 
-        val error = assertInstanceOf(ApiException::class.java, repository().provision(ACCESS_TOKEN).exceptionOrNull())
+        val error = assertInstanceOf(ApiException::class.java, repository().provision().exceptionOrNull())
 
         assertEquals(code, error.code)
         assertEquals(expectedMessage, error.message)
@@ -420,7 +532,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given an unexpected status code when provisioning then the reported error is used`() = runTest {
         server.enqueue(MockResponse(code = 500, body = """{"error":"boom"}"""))
 
-        val error = repository().provision(ACCESS_TOKEN).exceptionOrNull()
+        val error = repository().provision().exceptionOrNull()
 
         assertEquals("boom", error?.message)
     }
@@ -429,7 +541,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given an unexpected status code without an error when provisioning then the message mentions it`() = runTest {
         server.enqueue(MockResponse(code = 500, body = "{}"))
 
-        val error = repository().provision(ACCESS_TOKEN).exceptionOrNull()
+        val error = repository().provision().exceptionOrNull()
 
         assertEquals("未知錯誤 (HTTP 500)", error?.message)
     }
@@ -438,7 +550,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a provisioning request when it is sent then it carries the bearer token`() = runTest {
         server.enqueue(MockResponse(code = 202, body = """{"status":"provisioning"}"""))
 
-        repository().provision(ACCESS_TOKEN)
+        repository().provision()
 
         assertEquals("Bearer $ACCESS_TOKEN", server.takeRequest().headers["Authorization"])
     }
@@ -448,7 +560,7 @@ class WoowPaasRepositoryImplTest {
         val repository = repository()
         server.close()
 
-        val error = repository.provision(ACCESS_TOKEN).exceptionOrNull()
+        val error = repository.provision().exceptionOrNull()
 
         assertInstanceOf(IOException::class.java, error)
     }
@@ -458,7 +570,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a blank URL placeholder when provisioning then it is read as no URL`(haUrl: String) = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"ready","ha_url":"$haUrl"}"""))
 
-        val response = repository().provision(ACCESS_TOKEN).getOrThrow()
+        val response = repository().provision().getOrThrow()
 
         assertNull(response.haUrl)
     }
@@ -471,7 +583,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a ready instance when querying the status then the URL is returned`() = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"ready","ha_url":"https://ha.example.com"}"""))
 
-        val response = repository().getStatus(ACCESS_TOKEN).getOrThrow()
+        val response = repository().getStatus().getOrThrow()
 
         assertEquals(ProvisionStatus.Ready, response.status)
         assertEquals("https://ha.example.com", response.haUrl)
@@ -481,7 +593,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a failed provisioning when querying the status then the reported error is carried`() = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"error","error":"quota exceeded"}"""))
 
-        val response = repository().getStatus(ACCESS_TOKEN).getOrThrow()
+        val response = repository().getStatus().getOrThrow()
 
         assertEquals(ProvisionStatus.Error, response.status)
         assertEquals("quota exceeded", response.error)
@@ -494,7 +606,7 @@ class WoowPaasRepositoryImplTest {
     ) = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"$rawStatus"}"""))
 
-        val response = repository().getStatus(ACCESS_TOKEN).getOrThrow()
+        val response = repository().getStatus().getOrThrow()
 
         assertEquals(ProvisionStatus.from(rawStatus), response.status)
     }
@@ -503,7 +615,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a status this version does not know when querying the status then it stays Unknown`() = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"hibernating"}"""))
 
-        val response = repository().getStatus(ACCESS_TOKEN).getOrThrow()
+        val response = repository().getStatus().getOrThrow()
 
         assertEquals(ProvisionStatus.Unknown("hibernating"), response.status)
     }
@@ -512,7 +624,7 @@ class WoowPaasRepositoryImplTest {
     fun `Given a status query when it is sent then it is a GET carrying the bearer token`() = runTest {
         server.enqueue(MockResponse(code = 200, body = """{"status":"provisioning"}"""))
 
-        repository().getStatus(ACCESS_TOKEN)
+        repository().getStatus()
 
         val request = server.takeRequest()
         assertEquals("GET", request.method)
@@ -520,20 +632,20 @@ class WoowPaasRepositoryImplTest {
     }
 
     @Test
-    fun `Given a refused status query when querying the status then the reported error is used`() = runTest {
+    fun `Given a refused status query when querying the status then a new sign in is required`() = runTest {
         server.enqueue(MockResponse(code = 401, body = """{"error":"token expired"}"""))
 
-        val error = assertInstanceOf(ApiException::class.java, repository().getStatus(ACCESS_TOKEN).exceptionOrNull())
+        val error = repository().getStatus().exceptionOrNull()
 
-        assertEquals(401, error.code)
-        assertEquals("token expired", error.message)
+        assertInstanceOf(SessionExpiredException::class.java, error)
+        assertEquals(SESSION_EXPIRED_MESSAGE, error?.message)
     }
 
     @Test
     fun `Given a refused status query without an error when querying the status then the message mentions it`() = runTest {
         server.enqueue(MockResponse(code = 500, body = "{}"))
 
-        val error = repository().getStatus(ACCESS_TOKEN).exceptionOrNull()
+        val error = repository().getStatus().exceptionOrNull()
 
         assertEquals("查詢狀態失敗 (HTTP 500)", error?.message)
     }
@@ -543,12 +655,218 @@ class WoowPaasRepositoryImplTest {
         val repository = repository()
         server.close()
 
-        val error = repository.getStatus(ACCESS_TOKEN).exceptionOrNull()
+        val error = repository.getStatus().exceptionOrNull()
 
         assertInstanceOf(IOException::class.java, error)
     }
 
     // endregion
+
+    // region session and refresh
+
+    @Test
+    fun `Given no stored session when provisioning then a new sign in is required without any request`() = runTest {
+        sessionRepository.session = null
+
+        val error = repository().provision().exceptionOrNull()
+
+        assertInstanceOf(SessionExpiredException::class.java, error)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `Given an expired access token when provisioning then it is refreshed before the call`() = runTest {
+        sessionRepository.session = expiredSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 200, body = ROTATED_TOKEN_BODY))
+        server.enqueue(MockResponse(code = 202, body = """{"status":"provisioning"}"""))
+
+        val response = repository().provision().getOrThrow()
+
+        assertEquals(ProvisionStatus.Provisioning, response.status)
+        val refreshRequest = server.takeRequest()
+        assertEquals("/oauth2/token", refreshRequest.url.encodedPath)
+        assertEquals("Bearer access-2", server.takeRequest().headers["Authorization"])
+    }
+
+    @Test
+    fun `Given a refresh request when it is sent then it carries no client secret`() = runTest {
+        sessionRepository.session = expiredSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 200, body = ROTATED_TOKEN_BODY))
+        server.enqueue(MockResponse(code = 202, body = """{"status":"provisioning"}"""))
+
+        repository().provision()
+
+        // A public client that sends a secret is refused with a 401, so the body carries exactly three
+        // fields (RFC 6749 §6).
+        assertEquals(
+            mapOf(
+                "grant_type" to REFRESH_GRANT_TYPE,
+                "refresh_token" to REFRESH_TOKEN,
+                "client_id" to CLIENT_ID,
+            ),
+            server.takeRequest().formBody(),
+        )
+    }
+
+    @Test
+    fun `Given a successful refresh when it completed then the rotated session replaced the previous one`() = runTest {
+        sessionRepository.session = expiredSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 200, body = ROTATED_TOKEN_BODY))
+        server.enqueue(MockResponse(code = 202, body = """{"status":"provisioning"}"""))
+
+        repository().provision()
+
+        assertEquals(
+            WoowPaasSession(
+                accessToken = "access-2",
+                refreshToken = "refresh-2",
+                accessTokenExpiresAt = NOW + 3600.seconds,
+            ),
+            sessionRepository.session,
+        )
+    }
+
+    @Test
+    fun `Given a token refused mid flight when provisioning then it is refreshed and the call replayed`() = runTest {
+        sessionRepository.session = usableSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 401, body = """{"error":"invalid_token"}"""))
+        server.enqueue(MockResponse(code = 200, body = ROTATED_TOKEN_BODY))
+        server.enqueue(MockResponse(code = 200, body = """{"status":"ready","ha_url":"https://ha.example.com"}"""))
+
+        val response = repository().provision().getOrThrow()
+
+        assertEquals(ProvisionStatus.Ready, response.status)
+        assertEquals(3, server.requestCount)
+        assertEquals("Bearer $ACCESS_TOKEN", server.takeRequest().headers["Authorization"])
+        server.takeRequest()
+        assertEquals("Bearer access-2", server.takeRequest().headers["Authorization"])
+    }
+
+    @Test
+    fun `Given a token refused mid flight when querying the status then it is refreshed and the call replayed`() = runTest {
+        sessionRepository.session = usableSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 401, body = """{"error":"invalid_token"}"""))
+        server.enqueue(MockResponse(code = 200, body = ROTATED_TOKEN_BODY))
+        server.enqueue(MockResponse(code = 200, body = """{"status":"ready","ha_url":"https://ha.example.com"}"""))
+
+        val response = repository().getStatus().getOrThrow()
+
+        assertEquals(ProvisionStatus.Ready, response.status)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun `Given a reused refresh token when refreshing then the session is dropped and a new sign in is required`() = runTest {
+        sessionRepository.session = expiredSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 400, body = """{"error":"invalid_grant"}"""))
+
+        val error = repository().provision().exceptionOrNull()
+
+        assertInstanceOf(SessionExpiredException::class.java, error)
+        assertNull(sessionRepository.session, "a session that cannot be refreshed must not survive")
+    }
+
+    @Test
+    fun `Given the refresh endpoint failing when refreshing then the session survives and the failure is retryable`() = runTest {
+        val session = expiredSession(refreshToken = REFRESH_TOKEN)
+        sessionRepository.session = session
+        server.enqueue(MockResponse(code = 503, body = """{"error":"unavailable"}"""))
+
+        val error = repository().provision().exceptionOrNull()
+
+        // A backend hiccup says nothing about the token: dropping the session here would force a
+        // pointless new device flow.
+        assertInstanceOf(ApiException::class.java, error)
+        assertFalse(error is SessionExpiredException)
+        assertEquals(session, sessionRepository.session)
+    }
+
+    @Test
+    fun `Given an expired session without a refresh token when provisioning then it is dropped`() = runTest {
+        sessionRepository.session = expiredSession(refreshToken = null)
+
+        val error = repository().provision().exceptionOrNull()
+
+        assertInstanceOf(SessionExpiredException::class.java, error)
+        assertNull(sessionRepository.session)
+        assertEquals(0, server.requestCount)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["", "not json at all"])
+    fun `Given a replay refused with a body that cannot be read when provisioning then a new sign in is required`(
+        body: String,
+    ) = runTest {
+        sessionRepository.session = usableSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 401, body = """{"error":"invalid_token"}"""))
+        server.enqueue(MockResponse(code = 200, body = ROTATED_TOKEN_BODY))
+        server.enqueue(MockResponse(code = 401, body = body))
+
+        val error = repository().provision().exceptionOrNull()
+
+        // What the backend puts in a 401 changes nothing: reporting a parsing problem instead would offer a
+        // retry that cannot possibly work.
+        assertInstanceOf(SessionExpiredException::class.java, error)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["", "not json at all"])
+    fun `Given a replay refused with a body that cannot be read when querying the status then a new sign in is required`(
+        body: String,
+    ) = runTest {
+        sessionRepository.session = usableSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 401, body = """{"error":"invalid_token"}"""))
+        server.enqueue(MockResponse(code = 200, body = ROTATED_TOKEN_BODY))
+        server.enqueue(MockResponse(code = 401, body = body))
+
+        val error = repository().getStatus().exceptionOrNull()
+
+        assertInstanceOf(SessionExpiredException::class.java, error)
+    }
+
+    @Test
+    fun `Given a token still refused after a refresh when provisioning then a new sign in is required`() = runTest {
+        sessionRepository.session = usableSession(refreshToken = REFRESH_TOKEN)
+        server.enqueue(MockResponse(code = 401, body = """{"error":"invalid_token"}"""))
+        server.enqueue(MockResponse(code = 200, body = ROTATED_TOKEN_BODY))
+        server.enqueue(MockResponse(code = 401, body = """{"error":"invalid_token"}"""))
+
+        val error = repository().provision().exceptionOrNull()
+
+        assertInstanceOf(SessionExpiredException::class.java, error)
+    }
+
+    @Test
+    fun `Given concurrent calls refused at once when they refresh then the refresh token is spent once`() = runTest {
+        sessionRepository.session = usableSession(refreshToken = REFRESH_TOKEN)
+        val refreshCount = AtomicInteger()
+        server.dispatcher = RefusingOnceDispatcher(refreshCount)
+        val repository = repository()
+
+        val results = withContext(Dispatchers.IO) {
+            listOf(async { repository.provision() }, async { repository.getStatus() }).awaitAll()
+        }
+
+        // The backend invalidates a refresh token as soon as it is used, so a second concurrent refresh
+        // would kill the session both calls just repaired.
+        assertEquals(1, refreshCount.get())
+        results.forEach { assertNull(it.exceptionOrNull()) }
+        assertEquals("access-2", sessionRepository.session?.accessToken)
+    }
+
+    // endregion
+
+    private fun usableSession(refreshToken: String?) = WoowPaasSession(
+        accessToken = ACCESS_TOKEN,
+        refreshToken = refreshToken,
+        accessTokenExpiresAt = NOW + ACCESS_TOKEN_LIFETIME,
+    )
+
+    private fun expiredSession(refreshToken: String?) = WoowPaasSession(
+        accessToken = ACCESS_TOKEN,
+        refreshToken = refreshToken,
+        accessTokenExpiresAt = NOW - 1.seconds,
+    )
 
     /**
      * Starts [call], waits until its request provably reached the server, cancels the caller and checks that
@@ -590,11 +908,14 @@ class WoowPaasRepositoryImplTest {
         }
 
     private fun repository(basePathSuffix: String = ""): WoowPaasRepository = WoowPaasRepositoryImpl(
-        WoowPaasApiConfig(
+        config = WoowPaasApiConfig(
             baseUrl = server.url("/").toString().removeSuffix("/") + basePathSuffix,
             clientId = CLIENT_ID,
             scopes = SCOPES,
             deviceCodeGrantType = GRANT_TYPE,
+            refreshTokenGrantType = REFRESH_GRANT_TYPE,
         ),
+        sessionRepository = sessionRepository,
+        clock = clock,
     )
 }

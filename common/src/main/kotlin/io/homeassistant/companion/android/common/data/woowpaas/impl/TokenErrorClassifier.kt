@@ -5,7 +5,9 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 
 private const val SLOW_DOWN_INTERVAL_INCREMENT_SECONDS = 5
-private val HTTP_SERVER_ERROR_RANGE = 500..599
+
+/** The status codes that say something went wrong on the backend side rather than with the request. */
+internal val HTTP_SERVER_ERROR_RANGE = 500..599
 
 /** The OAuth 2.0 device flow error codes that keep the polling loop alive (RFC 8628 §3.5). */
 private object OAuthDeviceFlowError {

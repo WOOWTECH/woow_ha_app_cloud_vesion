@@ -2,7 +2,6 @@ package io.homeassistant.companion.android.onboarding.cloudsignin
 
 import io.homeassistant.companion.android.common.data.woowpaas.DeviceCodeResponse
 import io.homeassistant.companion.android.common.data.woowpaas.TokenPollResult
-import io.homeassistant.companion.android.common.data.woowpaas.TokenResponse
 import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
 import io.homeassistant.companion.android.testing.unit.ConsoleLogExtension
 import io.homeassistant.companion.android.testing.unit.FakeClock
@@ -39,14 +38,14 @@ class CloudSignInViewModelTest {
         coEvery { repository.pollToken(any(), any()) } returnsMany listOf(
             TokenPollResult.TransientError("network blip"),
             TokenPollResult.TransientError("network blip"),
-            TokenPollResult.Success(tokenResponse()),
+            TokenPollResult.Success,
         )
         val viewModel = CloudSignInViewModel(repository, fixedClock())
 
         viewModel.startDeviceFlow()
         advanceUntilIdle()
 
-        assertEquals(DeviceFlowUiState.Authorized("access-token"), viewModel.uiState.value)
+        assertEquals(DeviceFlowUiState.Authorized, viewModel.uiState.value)
         coVerify(atLeast = 3) { repository.pollToken(any(), any()) }
     }
 
@@ -71,14 +70,14 @@ class CloudSignInViewModelTest {
         coEvery { repository.requestDeviceCode() } returns Result.success(deviceCodeResponse(interval = 5))
         coEvery { repository.pollToken(any(), any()) } returnsMany listOf(
             TokenPollResult.SlowDown(newInterval = 10),
-            TokenPollResult.Success(tokenResponse()),
+            TokenPollResult.Success,
         )
         val viewModel = CloudSignInViewModel(repository, fixedClock())
 
         viewModel.startDeviceFlow()
         advanceUntilIdle()
 
-        assertEquals(DeviceFlowUiState.Authorized("access-token"), viewModel.uiState.value)
+        assertEquals(DeviceFlowUiState.Authorized, viewModel.uiState.value)
         coVerify(atLeast = 2) { repository.pollToken(any(), any()) }
     }
 
@@ -113,7 +112,7 @@ class CloudSignInViewModelTest {
         coEvery { repository.pollToken(any(), any()) } returnsMany listOf(
             TokenPollResult.TransientError("blip"),
             TokenPollResult.Pending,
-            TokenPollResult.Success(tokenResponse()),
+            TokenPollResult.Success,
         )
         val viewModel = CloudSignInViewModel(repository, fixedClock())
 
@@ -134,7 +133,7 @@ class CloudSignInViewModelTest {
 
         // Let the flow finish so no polling coroutine is left running.
         advanceUntilIdle()
-        assertEquals(DeviceFlowUiState.Authorized("access-token"), viewModel.uiState.value)
+        assertEquals(DeviceFlowUiState.Authorized, viewModel.uiState.value)
     }
 
     @Test
@@ -159,13 +158,5 @@ class CloudSignInViewModelTest {
         verificationUriComplete = "https://stg.woowtech.io/device?user_code=ABCD-1234",
         expiresIn = expiresIn,
         interval = interval,
-    )
-
-    private fun tokenResponse() = TokenResponse(
-        accessToken = "access-token",
-        tokenType = "Bearer",
-        expiresIn = 3600,
-        scope = "ha:provision",
-        refreshToken = null,
     )
 }

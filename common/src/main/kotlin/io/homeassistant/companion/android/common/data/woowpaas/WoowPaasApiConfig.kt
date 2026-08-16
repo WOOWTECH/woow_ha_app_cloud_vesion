@@ -12,10 +12,13 @@ package io.homeassistant.companion.android.common.data.woowpaas
  * @param clientId the OAuth 2.0 client identifier registered for this application
  * @param scopes the space separated OAuth 2.0 scopes requested during the device flow
  * @param deviceCodeGrantType the OAuth 2.0 grant type identifier of the device flow, see RFC 8628 §3.4
+ * @param refreshTokenGrantType the OAuth 2.0 grant type identifier used to rotate a session, see
+ * RFC 6749 §6
  */
 data class WoowPaasApiConfig(
     val baseUrl: String,
     val clientId: String,
     val scopes: String,
     val deviceCodeGrantType: String,
+    val refreshTokenGrantType: String,
 )

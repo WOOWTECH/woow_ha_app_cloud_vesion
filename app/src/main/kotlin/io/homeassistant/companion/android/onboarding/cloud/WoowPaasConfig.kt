@@ -12,4 +12,5 @@ internal object WoowPaasConfig {
     const val CLIENT_ID = BuildConfig.WOOW_PAAS_CLIENT_ID
     const val SCOPES = BuildConfig.WOOW_PAAS_SCOPES
     const val DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
+    const val REFRESH_TOKEN_GRANT_TYPE = "refresh_token"
 }

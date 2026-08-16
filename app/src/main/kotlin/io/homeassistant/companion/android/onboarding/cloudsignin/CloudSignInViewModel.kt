@@ -97,9 +97,7 @@ internal class CloudSignInViewModel @Inject constructor(
 
                 when (val result = repository.pollToken(deviceCode, currentInterval)) {
                     is TokenPollResult.Success -> {
-                        _uiState.value = DeviceFlowUiState.Authorized(
-                            accessToken = result.token.accessToken,
-                        )
+                        _uiState.value = DeviceFlowUiState.Authorized
                         return@launch
                     }
                     is TokenPollResult.Pending -> {
@@ -162,6 +160,11 @@ internal sealed interface DeviceFlowUiState {
         val verificationUriComplete: String,
         val isReconnecting: Boolean = false,
     ) : DeviceFlowUiState
-    data class Authorized(val accessToken: String) : DeviceFlowUiState
+
+    /**
+     * The user authorized the device; the credentials are already persisted by the repository, so nothing
+     * has to be carried over to the next screen.
+     */
+    data object Authorized : DeviceFlowUiState
     data class Error(val message: String, val canRetry: Boolean) : DeviceFlowUiState
 }

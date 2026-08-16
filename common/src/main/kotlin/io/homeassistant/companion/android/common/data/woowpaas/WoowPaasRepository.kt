@@ -7,6 +7,10 @@ package io.homeassistant.companion.android.common.data.woowpaas
  * authorized the application, then [provision] to ask for a Home Assistant instance and [getStatus]
  * until that instance is ready.
  *
+ * Credentials never travel through the caller: [pollToken] persists the session it obtained in the
+ * [WoowPaasSessionRepository], and the authenticated calls read it back from there and refresh it on their
+ * own. A flow interrupted by a process death therefore resumes where it stopped instead of starting over.
+ *
  * Implementations perform their network calls on a background dispatcher, so every function is safe to
  * call from the main thread.
  */
@@ -21,7 +25,7 @@ interface WoowPaasRepository {
     suspend fun requestDeviceCode(): Result<DeviceCodeResponse>
 
     /**
-     * Polls the token endpoint once.
+     * Polls the token endpoint once, persisting the session as soon as one is issued.
      *
      * Never throws for network or protocol problems: everything is reported through [TokenPollResult] so
      * the caller can decide whether to keep polling. A cancellation of the calling coroutine is not
@@ -39,11 +43,11 @@ interface WoowPaasRepository {
      * The call is idempotent on the backend side: asking again while an instance already exists reports
      * the state of that instance instead of failing.
      *
-     * @param accessToken the token obtained from [pollToken]
-     * @return a failure carrying an [ApiException] when the request was refused, for instance with a 401
-     * when the token expired or a 403 when the `ha:provision` scope is missing
+     * @return a failure carrying a [SessionExpiredException] when the stored session is gone and a new
+     * device flow is needed, or an [ApiException] when the request was refused, for instance with a 403
+     * when the `ha:provision` scope is missing
      */
-    suspend fun provision(accessToken: String): Result<ProvisionResponse>
+    suspend fun provision(): Result<ProvisionResponse>
 
     /**
      * Queries the provisioning status of the authenticated account's Home Assistant instance.
@@ -52,7 +56,8 @@ interface WoowPaasRepository {
      * [Result]: this function is called from a polling loop, and swallowing cancellation would turn a
      * cancelled poll into a spurious failure.
      *
-     * @param accessToken the token obtained from [pollToken]
+     * @return a failure carrying a [SessionExpiredException] when the stored session is gone and a new
+     * device flow is needed
      */
-    suspend fun getStatus(accessToken: String): Result<StatusResponse>
+    suspend fun getStatus(): Result<StatusResponse>
 }

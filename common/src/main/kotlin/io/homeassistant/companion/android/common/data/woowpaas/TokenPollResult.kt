@@ -8,8 +8,13 @@ package io.homeassistant.companion.android.common.data.woowpaas
  */
 sealed interface TokenPollResult {
 
-    /** The user authorized the device and a token was issued. */
-    data class Success(val token: TokenResponse) : TokenPollResult
+    /**
+     * The user authorized the device, and the session that was issued is already persisted.
+     *
+     * The credentials themselves are not reported: they live in the
+     * [WoowPaasSessionRepository] so there is a single place holding them.
+     */
+    data object Success : TokenPollResult
 
     /** The user has not authorized the device yet. */
     data object Pending : TokenPollResult

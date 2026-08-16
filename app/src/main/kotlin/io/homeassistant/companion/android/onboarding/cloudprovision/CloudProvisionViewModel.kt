@@ -3,9 +3,10 @@ package io.homeassistant.companion.android.onboarding.cloudprovision
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.homeassistant.companion.android.onboarding.cloud.ApiException
+import io.homeassistant.companion.android.common.data.woowpaas.ApiException
+import io.homeassistant.companion.android.common.data.woowpaas.ProvisionStatus
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
 import io.homeassistant.companion.android.onboarding.cloud.CloudOnboardingState
-import io.homeassistant.companion.android.onboarding.cloud.WoowPaasApi
 import java.io.IOException
 import javax.inject.Inject
 import kotlin.time.Clock
@@ -24,16 +25,10 @@ private val POLL_TIMEOUT = 10.minutes
 
 @OptIn(ExperimentalTime::class)
 @HiltViewModel
-internal class CloudProvisionViewModel internal constructor(private val api: WoowPaasApi, private val clock: Clock) :
-    ViewModel() {
-
-    /**
-     * Production constructor used by Hilt. [WoowPaasApi] is created directly (never injected) to keep its
-     * lazily-built [okhttp3.OkHttpClient] off the main thread, while [Clock] is provided by Hilt. The primary
-     * constructor exposes both dependencies so unit tests can supply fakes without going through Hilt.
-     */
-    @Inject
-    constructor(clock: Clock) : this(api = WoowPaasApi(), clock = clock)
+internal class CloudProvisionViewModel @Inject constructor(
+    private val repository: WoowPaasRepository,
+    private val clock: Clock,
+) : ViewModel() {
 
     private var accessToken: String? = null
 
@@ -62,10 +57,10 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
             try {
                 _uiState.value = ProvisionUiState.Provisioning
 
-                api.provision(token).fold(
+                repository.provision(token).fold(
                     onSuccess = { response ->
-                        when (response.status) {
-                            "ready" -> {
+                        when (val status = response.status) {
+                            ProvisionStatus.Ready -> {
                                 val url = response.haUrl
                                 if (url != null) {
                                     _uiState.value = ProvisionUiState.Ready(url)
@@ -76,18 +71,22 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
                                     )
                                 }
                             }
-                            "provisioning" -> {
+                            ProvisionStatus.Provisioning -> {
                                 startStatusPolling(token)
                             }
-                            "suspended" -> {
+                            ProvisionStatus.Suspended -> {
                                 _uiState.value = ProvisionUiState.Suspended
                             }
-                            "deleting" -> {
+                            ProvisionStatus.Deleting -> {
                                 _uiState.value = ProvisionUiState.Deleting
                             }
-                            else -> {
+                            // A provisioning request never answers "none" or "error"; surface the raw value.
+                            ProvisionStatus.None,
+                            ProvisionStatus.Error,
+                            is ProvisionStatus.Unknown,
+                            -> {
                                 _uiState.value = ProvisionUiState.Error(
-                                    message = "未預期的狀態: ${response.status}",
+                                    message = "未預期的狀態: ${status.rawValue}",
                                     canRetry = true,
                                 )
                             }
@@ -142,10 +141,10 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
                         return@launch
                     }
 
-                    api.getStatus(token).fold(
+                    repository.getStatus(token).fold(
                         onSuccess = { response ->
-                            when (response.status) {
-                                "ready" -> {
+                            when (val status = response.status) {
+                                ProvisionStatus.Ready -> {
                                     val url = response.haUrl
                                     if (url != null) {
                                         _uiState.value = ProvisionUiState.Ready(url)
@@ -157,27 +156,31 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
                                     }
                                     return@launch
                                 }
-                                "provisioning" -> {
+                                ProvisionStatus.Provisioning -> {
                                     interval = (interval * 2).coerceAtMost(MAX_POLL_INTERVAL_MS)
                                 }
-                                "error" -> {
+                                ProvisionStatus.Error -> {
                                     _uiState.value = ProvisionUiState.Error(
                                         message = response.error ?: "佈建失敗",
                                         canRetry = true,
                                     )
                                     return@launch
                                 }
-                                "suspended" -> {
+                                ProvisionStatus.Suspended -> {
                                     _uiState.value = ProvisionUiState.Suspended
                                     return@launch
                                 }
-                                "deleting" -> {
+                                ProvisionStatus.Deleting -> {
                                     _uiState.value = ProvisionUiState.Deleting
                                     return@launch
                                 }
-                                else -> {
+                                // "none" means the instance vanished mid-flow, which is as abnormal here
+                                // as a status this version does not know about.
+                                ProvisionStatus.None,
+                                is ProvisionStatus.Unknown,
+                                -> {
                                     _uiState.value = ProvisionUiState.Error(
-                                        message = "異常狀態：${response.status}",
+                                        message = "異常狀態：${status.rawValue}",
                                         canRetry = true,
                                     )
                                     return@launch

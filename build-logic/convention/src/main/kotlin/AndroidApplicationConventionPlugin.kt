@@ -8,9 +8,10 @@ import org.gradle.kotlin.dsl.configure
 private const val APPLICATION_ID = "com.woowtech.homecloud"
 private const val NAMESPACE = "io.homeassistant.companion.android"
 
-// WOOW paas 環境設定：debug 走 stg，release 走 prod（prod 端點是否真的落在 `/woow` 前綴下待 paas 平台諮詢確認）。
+// WOOW paas 環境設定：debug 走 stg，release 走 prod。
+// prod 端點皆在網域根路徑下（已由 paas-platform 諮詢確認，`/woow` 只是 SPA 網頁入口，不是 API 前綴）。
 private const val WOOW_PAAS_BASE_URL_DEBUG = "https://stg.woowtech.io"
-private const val WOOW_PAAS_BASE_URL_RELEASE = "https://paas.woowtech.io/woow"
+private const val WOOW_PAAS_BASE_URL_RELEASE = "https://paas.woowtech.io"
 private const val WOOW_PAAS_CLIENT_ID = "woow-ha-app"
 private const val WOOW_PAAS_SCOPES = "ha:provision workspace:read smarthome:read"
 

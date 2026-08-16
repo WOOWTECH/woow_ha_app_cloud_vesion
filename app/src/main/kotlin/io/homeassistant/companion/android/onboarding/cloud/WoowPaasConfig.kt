@@ -21,9 +21,9 @@ internal object WoowPaasConfig {
 }
 
 /**
- * Joins [base] and [path] into a single URL, normalizing slashes so a trailing slash on [base] (prod
- * carries a `/woow` path prefix, not just a bare host) or a missing leading slash on [path] never
- * produces a malformed URL such as a double slash or a missing separator.
+ * Joins [base] and [path] into a single URL, normalizing slashes so a trailing slash on [base] or a
+ * missing leading slash on [path] never produces a malformed URL such as a double slash or a missing
+ * separator — including when [base] carries its own path segment rather than being a bare host.
  */
 internal fun joinUrl(base: String, path: String): String {
     val trimmedBase = base.trimEnd('/')

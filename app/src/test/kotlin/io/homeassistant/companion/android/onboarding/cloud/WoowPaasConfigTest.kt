@@ -8,19 +8,21 @@ import org.junit.jupiter.params.provider.CsvSource
 /**
  * Unit tests for [joinUrl], the URL-composition helper backing [WoowPaasConfig.resolveUrl].
  *
- * Prod's BASE_URL carries a path prefix (`/woow`) instead of being a bare host, so naive string
- * concatenation is fragile against trailing/leading slash mismatches. These tests pin down the
- * normalization so a misconfigured BASE_URL never silently produces a malformed request URL.
+ * Naive string concatenation of a BASE_URL and a request path is fragile against trailing/leading
+ * slash mismatches, and BASE_URL isn't guaranteed to be a bare host (see the `gateway.example.com`
+ * cases below). These tests pin down the normalization so a misconfigured BASE_URL never silently
+ * produces a malformed request URL.
  */
 class WoowPaasConfigTest {
 
     @ParameterizedTest(name = "[{index}] base=\"{0}\" path=\"{1}\" -> \"{2}\"")
     @CsvSource(
         "https://stg.woowtech.io, /oauth2/device_authorization, https://stg.woowtech.io/oauth2/device_authorization",
-        "https://paas.woowtech.io/woow, /oauth2/device_authorization, https://paas.woowtech.io/woow/oauth2/device_authorization",
+        "https://paas.woowtech.io, /oauth2/device_authorization, https://paas.woowtech.io/oauth2/device_authorization",
         "https://stg.woowtech.io/, /oauth2/token, https://stg.woowtech.io/oauth2/token",
         "https://stg.woowtech.io, oauth2/token, https://stg.woowtech.io/oauth2/token",
-        "https://paas.woowtech.io/woow/, /api/ha-paas/status, https://paas.woowtech.io/woow/api/ha-paas/status",
+        "https://gateway.example.com/api-prefix, /oauth2/device_authorization, https://gateway.example.com/api-prefix/oauth2/device_authorization",
+        "https://gateway.example.com/api-prefix/, /api/ha-paas/status, https://gateway.example.com/api-prefix/api/ha-paas/status",
     )
     fun `Given a BASE_URL and a request path when joinUrl then it normalizes slashes into a single well-formed URL`(
         base: String,

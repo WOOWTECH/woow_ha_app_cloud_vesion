@@ -12,7 +12,7 @@ import io.homeassistant.companion.android.common.R as commonR
 import io.homeassistant.companion.android.onboarding.BaseOnboardingNavigationTest
 import io.homeassistant.companion.android.onboarding.cloudchooser.navigation.CloudChooserRoute
 import io.homeassistant.companion.android.onboarding.cloudprovision.navigation.CloudProvisionRoute
-import io.homeassistant.companion.android.onboarding.cloudprovision.navigation.navigateToCloudProvision
+import io.homeassistant.companion.android.onboarding.cloudprovision.navigation.navigateToCloudProvisionAfterSignIn
 import io.homeassistant.companion.android.onboarding.cloudsignin.CloudSignInViewModel
 import io.homeassistant.companion.android.onboarding.cloudsignin.DeviceFlowUiState
 import io.homeassistant.companion.android.testing.unit.stringResource
@@ -78,18 +78,20 @@ internal class CloudSignInNavigationTest : BaseOnboardingNavigationTest() {
     }
 
     @Test
-    fun `Given CloudProvision reached from CloudSignIn when pressing back twice then back stack unwinds to CloudChooser`() {
+    fun `Given CloudProvision reached from CloudSignIn when pressing back then back stack unwinds directly to CloudChooser`() {
         testNavigation {
             navController.navigateToCloudSignIn()
             waitForIdle()
-            navController.navigateToCloudProvision()
+
+            // Mirrors the real onAuthorized() wiring, which pops CloudSignIn off the back stack (inclusive)
+            // instead of pushing on top of it: nothing is left of CloudSignIn to unwind through once
+            // CloudProvision is reached, so a single back press lands directly on CloudChooser. The back
+            // stack this produces through the actual device flow is covered end to end by
+            // CloudOnboardingNavigationTest; this test only pins down that CloudSignIn's own navigation
+            // graph wires the same popUpTo.
+            navController.navigateToCloudProvisionAfterSignIn()
             waitForIdle()
             assertTrue(navController.currentBackStackEntry?.destination?.hasRoute<CloudProvisionRoute>() == true)
-
-            composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
-            waitForIdle()
-            assertTrue(navController.currentBackStackEntry?.destination?.hasRoute<CloudSignInRoute>() == true)
-            onNodeWithText(USER_CODE).assertIsDisplayed()
 
             composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
             waitForIdle()

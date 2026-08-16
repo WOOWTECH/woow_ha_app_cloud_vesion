@@ -224,6 +224,16 @@ class WoowPaasRepositoryImplTest {
         assertEquals("伺服器回應格式錯誤", error.message)
     }
 
+    @Test
+    fun `Given an unreadable body on a success when querying the status then the status code is unknown`() = runTest {
+        server.enqueue(MockResponse(code = 200, body = "not json at all"))
+
+        val error = assertInstanceOf(ApiException::class.java, repository().getStatus(ACCESS_TOKEN).exceptionOrNull())
+
+        assertEquals(HTTP_CODE_UNKNOWN, error.code)
+        assertEquals("伺服器回應格式錯誤", error.message)
+    }
+
     // endregion
 
     // region cancellation
@@ -248,6 +258,11 @@ class WoowPaasRepositoryImplTest {
     @Test
     fun `Given the caller is cancelled when provisioning then no result is produced`() = runTest {
         assertCancellationIsNotSwallowed { provision(ACCESS_TOKEN) }
+    }
+
+    @Test
+    fun `Given the caller is cancelled when querying the status then no result is produced`() = runTest {
+        assertCancellationIsNotSwallowed { getStatus(ACCESS_TOKEN) }
     }
 
     // endregion

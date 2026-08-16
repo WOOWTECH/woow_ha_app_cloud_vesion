@@ -21,6 +21,7 @@ import java.net.HttpURLConnection.HTTP_OK
 import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import java.net.HttpURLConnection.HTTP_UNAVAILABLE
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,7 +50,7 @@ private const val UNUSED_RETROFIT_BASE_URL = "http://localhost/"
 private const val JSON_MEDIA_TYPE = "application/json; charset=UTF-8"
 private const val BEARER_PREFIX = "Bearer "
 
-private const val MALFORMED_BODY_MESSAGE = "伺服器回應格式錯誤"
+internal const val MALFORMED_BODY_MESSAGE = "伺服器回應格式錯誤"
 private const val MISSING_FIELDS_MESSAGE = "伺服器回應缺少必要欄位"
 private const val UNKNOWN_OAUTH_ERROR = "unknown_error"
 
@@ -68,7 +69,8 @@ private const val NULL_LITERAL = "null"
  * @param config the environment this instance talks to; its `baseUrl` may carry a path prefix, in which
  * case every endpoint is appended to it.
  */
-class WoowPaasRepositoryImpl(private val config: WoowPaasApiConfig) : WoowPaasRepository {
+internal class WoowPaasRepositoryImpl @Inject constructor(private val config: WoowPaasApiConfig) :
+    WoowPaasRepository {
 
     private val baseUrl: HttpUrl by lazy { config.baseUrl.toHttpUrl() }
 
@@ -191,8 +193,14 @@ class WoowPaasRepositoryImpl(private val config: WoowPaasApiConfig) : WoowPaasRe
  *
  * A [CancellationException] is re-thrown instead: these calls happen inside polling loops, and reporting
  * a cancelled call as a failure would surface a spurious error to the user.
+ *
+ * Known limitation: when a successful response carries a body that is not readable JSON, Retrofit runs the
+ * converter while building the response object, so the failure surfaces before there is anything to read
+ * the status code from. Such a failure is reported with [HTTP_CODE_UNKNOWN] rather than the real code. The
+ * callers only branch on 401, 403 and 503, none of which can reach this path, so the placeholder never
+ * changes what the user is shown.
  */
-private inline fun <T> runCatchingApi(block: () -> T): Result<T> = try {
+internal inline fun <T> runCatchingApi(block: () -> T): Result<T> = try {
     Result.success(block())
 } catch (e: CancellationException) {
     throw e

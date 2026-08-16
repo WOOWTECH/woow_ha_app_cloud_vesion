@@ -1,20 +1,30 @@
 package io.homeassistant.companion.android.common.data.woowpaas.impl
 
 import io.homeassistant.companion.android.common.data.woowpaas.ApiException
+import io.homeassistant.companion.android.common.data.woowpaas.HTTP_CODE_UNKNOWN
 import io.homeassistant.companion.android.common.data.woowpaas.ProvisionStatus
 import io.homeassistant.companion.android.common.data.woowpaas.TokenPollResult
 import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasApiConfig
 import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
 import java.io.IOException
 import java.net.URLDecoder
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -25,6 +35,12 @@ private const val CLIENT_ID = "woow-ha-app"
 private const val SCOPES = "ha:provision workspace:read smarthome:read"
 private const val GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 private const val ACCESS_TOKEN = "token-123"
+
+/** Long enough that a call cannot finish before the test cancels it. */
+private const val RESPONSE_DELAY_SECONDS = 30L
+
+/** Upper bound on how long a request may take to reach the server before the test gives up. */
+private const val REQUEST_TIMEOUT_SECONDS = 10L
 
 private const val DEVICE_CODE_BODY = """
     {
@@ -178,6 +194,60 @@ class WoowPaasRepositoryImplTest {
         val error = repository().requestDeviceCode().exceptionOrNull()
 
         assertInstanceOf(ApiException::class.java, error)
+    }
+
+    // endregion
+
+    // region malformed successful bodies
+
+    /**
+     * Pins down a known limitation: Retrofit decodes a successful body while building its response object,
+     * so the real status code is gone by the time the failure surfaces and [HTTP_CODE_UNKNOWN] stands in.
+     */
+    @Test
+    fun `Given an unreadable body on a success when requesting a device code then the status code is unknown`() = runTest {
+        server.enqueue(MockResponse(code = 200, body = "not json at all"))
+
+        val error = assertInstanceOf(ApiException::class.java, repository().requestDeviceCode().exceptionOrNull())
+
+        assertEquals(HTTP_CODE_UNKNOWN, error.code)
+        assertEquals("伺服器回應格式錯誤", error.message)
+    }
+
+    @Test
+    fun `Given an unreadable body on a success when provisioning then the status code is unknown`() = runTest {
+        server.enqueue(MockResponse(code = 200, body = "not json at all"))
+
+        val error = assertInstanceOf(ApiException::class.java, repository().provision(ACCESS_TOKEN).exceptionOrNull())
+
+        assertEquals(HTTP_CODE_UNKNOWN, error.code)
+        assertEquals("伺服器回應格式錯誤", error.message)
+    }
+
+    // endregion
+
+    // region cancellation
+
+    /**
+     * The guard with teeth: removing the `CancellationException` re-throw from `runCatchingApi` makes this
+     * test fail, while the end to end tests below would still pass because `withContext` re-throws on its
+     * own once the calling job is cancelled.
+     */
+    @Test
+    fun `Given a cancellation when running an API call then it is re-thrown instead of captured`() {
+        assertThrows(CancellationException::class.java) {
+            runCatchingApi { throw CancellationException("cancelled mid call") }
+        }
+    }
+
+    @Test
+    fun `Given the caller is cancelled when requesting a device code then no result is produced`() = runTest {
+        assertCancellationIsNotSwallowed { requestDeviceCode() }
+    }
+
+    @Test
+    fun `Given the caller is cancelled when provisioning then no result is produced`() = runTest {
+        assertCancellationIsNotSwallowed { provision(ACCESS_TOKEN) }
     }
 
     // endregion
@@ -358,6 +428,16 @@ class WoowPaasRepositoryImplTest {
         assertEquals("Bearer $ACCESS_TOKEN", server.takeRequest().headers["Authorization"])
     }
 
+    @Test
+    fun `Given an unreachable server when provisioning then the failure stays an IOException`() = runTest {
+        val repository = repository()
+        server.close()
+
+        val error = repository.provision(ACCESS_TOKEN).exceptionOrNull()
+
+        assertInstanceOf(IOException::class.java, error)
+    }
+
     @ParameterizedTest
     @ValueSource(strings = ["", "null"])
     fun `Given a blank URL placeholder when provisioning then it is read as no URL`(haUrl: String) = runTest {
@@ -454,6 +534,32 @@ class WoowPaasRepositoryImplTest {
     }
 
     // endregion
+
+    /**
+     * Starts [call], waits until its request provably reached the server, cancels the caller and checks that
+     * the repository surfaced the cancellation rather than turning it into a [Result].
+     */
+    private suspend fun CoroutineScope.assertCancellationIsNotSwallowed(call: suspend WoowPaasRepository.() -> Any) {
+        // A slow body keeps the call in flight long enough to be cancelled while it is still waiting.
+        server.enqueue(
+            MockResponse.Builder().code(200).body("{}").bodyDelay(RESPONSE_DELAY_SECONDS, TimeUnit.SECONDS).build(),
+        )
+        val repository = repository()
+        val outcome = CompletableDeferred<Any>()
+
+        val job = launch(Dispatchers.IO) {
+            try {
+                outcome.complete(repository.call())
+            } catch (e: CancellationException) {
+                outcome.complete(e)
+            }
+        }
+        val request = withContext(Dispatchers.IO) { server.takeRequest(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) }
+        assertNotNull(request, "the call never reached the server, so nothing was cancelled mid flight")
+        job.cancel()
+
+        assertInstanceOf(CancellationException::class.java, outcome.await())
+    }
 
     /**
      * Decodes an `application/x-www-form-urlencoded` request body so the assertions talk about the values

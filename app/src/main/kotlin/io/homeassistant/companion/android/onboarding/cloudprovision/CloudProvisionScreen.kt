@@ -76,7 +76,7 @@ internal fun CloudProvisionScreen(
 }
 
 @Composable
-private fun CloudProvisionContent(
+internal fun CloudProvisionContent(
     uiState: ProvisionUiState,
     onBackClick: () -> Unit,
     onProvisionClick: () -> Unit,

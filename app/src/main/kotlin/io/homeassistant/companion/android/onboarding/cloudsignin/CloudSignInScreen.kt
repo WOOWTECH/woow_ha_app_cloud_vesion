@@ -70,6 +70,21 @@ internal fun CloudSignInScreen(
         }
     }
 
+    CloudSignInContent(
+        uiState = uiState,
+        onBackClick = onBackClick,
+        onRetry = viewModel::startDeviceFlow,
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun CloudSignInContent(
+    uiState: DeviceFlowUiState,
+    onBackClick: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Scaffold(
         modifier = modifier,
         topBar = { HATopBar(onBackClick = onBackClick) },
@@ -86,7 +101,7 @@ internal fun CloudSignInScreen(
         ) {
             Spacer(modifier = Modifier.weight(0.2f))
 
-            when (val state = uiState) {
+            when (uiState) {
                 is DeviceFlowUiState.Idle,
                 is DeviceFlowUiState.RequestingCode,
                 -> {
@@ -99,9 +114,9 @@ internal fun CloudSignInScreen(
 
                 is DeviceFlowUiState.WaitingForAuth -> {
                     WaitingForAuthContent(
-                        userCode = state.userCode,
-                        verificationUriComplete = state.verificationUriComplete,
-                        isReconnecting = state.isReconnecting,
+                        userCode = uiState.userCode,
+                        verificationUriComplete = uiState.verificationUriComplete,
+                        isReconnecting = uiState.isReconnecting,
                     )
                 }
 
@@ -115,9 +130,9 @@ internal fun CloudSignInScreen(
 
                 is DeviceFlowUiState.Error -> {
                     ErrorContent(
-                        message = state.message,
-                        canRetry = state.canRetry,
-                        onRetry = { viewModel.startDeviceFlow() },
+                        message = uiState.message,
+                        canRetry = uiState.canRetry,
+                        onRetry = onRetry,
                     )
                 }
             }
@@ -213,7 +228,15 @@ private fun ColumnScope.ErrorContent(message: String, canRetry: Boolean, onRetry
 @Composable
 private fun CloudSignInWaitingPreview() {
     HAThemeForPreview {
-        WaitingForAuthPreviewScaffold(isReconnecting = false)
+        CloudSignInContent(
+            uiState = DeviceFlowUiState.WaitingForAuth(
+                userCode = "ABCD-1234",
+                verificationUri = "https://stg.woowtech.io/device",
+                verificationUriComplete = "https://stg.woowtech.io/device?user_code=ABCD-1234",
+            ),
+            onBackClick = {},
+            onRetry = {},
+        )
     }
 }
 
@@ -221,30 +244,27 @@ private fun CloudSignInWaitingPreview() {
 @Composable
 private fun CloudSignInReconnectingPreview() {
     HAThemeForPreview {
-        WaitingForAuthPreviewScaffold(isReconnecting = true)
+        CloudSignInContent(
+            uiState = DeviceFlowUiState.WaitingForAuth(
+                userCode = "ABCD-1234",
+                verificationUri = "https://stg.woowtech.io/device",
+                verificationUriComplete = "https://stg.woowtech.io/device?user_code=ABCD-1234",
+                isReconnecting = true,
+            ),
+            onBackClick = {},
+            onRetry = {},
+        )
     }
 }
 
+@HAPreviews
 @Composable
-private fun WaitingForAuthPreviewScaffold(isReconnecting: Boolean) {
-    Scaffold(
-        topBar = { HATopBar(onBackClick = {}) },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = HADimens.SPACE4),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(HADimens.SPACE6),
-        ) {
-            Spacer(modifier = Modifier.weight(0.2f))
-            WaitingForAuthContent(
-                userCode = "ABCD-1234",
-                verificationUriComplete = "https://stg.woowtech.io/device?user_code=ABCD-1234",
-                isReconnecting = isReconnecting,
-            )
-            Spacer(modifier = Modifier.weight(0.8f))
-        }
+private fun CloudSignInErrorPreview() {
+    HAThemeForPreview {
+        CloudSignInContent(
+            uiState = DeviceFlowUiState.Error(message = "無法取得驗證碼", canRetry = true),
+            onBackClick = {},
+            onRetry = {},
+        )
     }
 }

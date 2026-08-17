@@ -1,5 +1,6 @@
-package io.homeassistant.companion.android.onboarding.cloud
+package io.homeassistant.companion.android.common.data.woowpaas.impl
 
+import io.homeassistant.companion.android.common.data.woowpaas.TokenPollResult
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -10,13 +11,13 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 /**
- * Unit tests for the pure classification helpers backing [WoowPaasApi.pollToken].
+ * Unit tests for the pure classification helpers backing the device flow token polling.
  *
  * The device flow token endpoint (RFC 8628 §3.5) distinguishes retryable failures
  * (network hiccups, HTTP 5xx) from terminal ones (access_denied, expired_token).
  * These tests pin that mapping down without touching the network.
  */
-class WoowPaasApiTest {
+class TokenErrorClassifierTest {
 
     @Test
     fun `Given HTTP 5xx when classifyTokenError then result is TransientError`() {

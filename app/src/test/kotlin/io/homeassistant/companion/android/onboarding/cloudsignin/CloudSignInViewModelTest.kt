@@ -1,9 +1,8 @@
 package io.homeassistant.companion.android.onboarding.cloudsignin
 
-import io.homeassistant.companion.android.onboarding.cloud.DeviceCodeResponse
-import io.homeassistant.companion.android.onboarding.cloud.TokenPollResult
-import io.homeassistant.companion.android.onboarding.cloud.TokenResponse
-import io.homeassistant.companion.android.onboarding.cloud.WoowPaasApi
+import io.homeassistant.companion.android.common.data.woowpaas.DeviceCodeResponse
+import io.homeassistant.companion.android.common.data.woowpaas.TokenPollResult
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
 import io.homeassistant.companion.android.testing.unit.ConsoleLogExtension
 import io.homeassistant.companion.android.testing.unit.FakeClock
 import io.homeassistant.companion.android.testing.unit.MainDispatcherJUnit5Extension
@@ -31,31 +30,31 @@ import org.junit.jupiter.params.provider.ValueSource
 @OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
 class CloudSignInViewModelTest {
 
-    private val api: WoowPaasApi = mockk()
+    private val repository: WoowPaasRepository = mockk()
 
     @Test
     fun `Given transient errors followed by success when polling then it keeps retrying until Authorized`() = runTest {
-        coEvery { api.requestDeviceCode() } returns Result.success(deviceCodeResponse())
-        coEvery { api.pollToken(any(), any()) } returnsMany listOf(
+        coEvery { repository.requestDeviceCode() } returns Result.success(deviceCodeResponse())
+        coEvery { repository.pollToken(any(), any()) } returnsMany listOf(
             TokenPollResult.TransientError("network blip"),
             TokenPollResult.TransientError("network blip"),
-            TokenPollResult.Success(tokenResponse()),
+            TokenPollResult.Success,
         )
-        val viewModel = CloudSignInViewModel(api, fixedClock())
+        val viewModel = CloudSignInViewModel(repository, fixedClock())
 
         viewModel.startDeviceFlow()
         advanceUntilIdle()
 
-        assertEquals(DeviceFlowUiState.Authorized("access-token"), viewModel.uiState.value)
-        coVerify(atLeast = 3) { api.pollToken(any(), any()) }
+        assertEquals(DeviceFlowUiState.Authorized, viewModel.uiState.value)
+        coVerify(atLeast = 3) { repository.pollToken(any(), any()) }
     }
 
     @ParameterizedTest
     @ValueSource(strings = ["使用者拒絕授權", "expired_token"])
     fun `Given pollToken returns a terminal Failed when polling then it stops immediately with an Error`(reason: String) = runTest {
-        coEvery { api.requestDeviceCode() } returns Result.success(deviceCodeResponse())
-        coEvery { api.pollToken(any(), any()) } returns TokenPollResult.Failed(reason)
-        val viewModel = CloudSignInViewModel(api, fixedClock())
+        coEvery { repository.requestDeviceCode() } returns Result.success(deviceCodeResponse())
+        coEvery { repository.pollToken(any(), any()) } returns TokenPollResult.Failed(reason)
+        val viewModel = CloudSignInViewModel(repository, fixedClock())
 
         viewModel.startDeviceFlow()
         advanceUntilIdle()
@@ -63,31 +62,31 @@ class CloudSignInViewModelTest {
         val state = viewModel.uiState.value
         assertInstanceOf(DeviceFlowUiState.Error::class.java, state)
         assertEquals(reason, (state as DeviceFlowUiState.Error).message)
-        coVerify(exactly = 1) { api.pollToken(any(), any()) }
+        coVerify(exactly = 1) { repository.pollToken(any(), any()) }
     }
 
     @Test
     fun `Given a slow_down response when polling then it keeps polling and reaches Authorized`() = runTest {
-        coEvery { api.requestDeviceCode() } returns Result.success(deviceCodeResponse(interval = 5))
-        coEvery { api.pollToken(any(), any()) } returnsMany listOf(
+        coEvery { repository.requestDeviceCode() } returns Result.success(deviceCodeResponse(interval = 5))
+        coEvery { repository.pollToken(any(), any()) } returnsMany listOf(
             TokenPollResult.SlowDown(newInterval = 10),
-            TokenPollResult.Success(tokenResponse()),
+            TokenPollResult.Success,
         )
-        val viewModel = CloudSignInViewModel(api, fixedClock())
+        val viewModel = CloudSignInViewModel(repository, fixedClock())
 
         viewModel.startDeviceFlow()
         advanceUntilIdle()
 
-        assertEquals(DeviceFlowUiState.Authorized("access-token"), viewModel.uiState.value)
-        coVerify(atLeast = 2) { api.pollToken(any(), any()) }
+        assertEquals(DeviceFlowUiState.Authorized, viewModel.uiState.value)
+        coVerify(atLeast = 2) { repository.pollToken(any(), any()) }
     }
 
     @Test
     fun `Given the network stays down when polling then it stops at the device code expiry with a friendly Error`() = runTest {
         val clock = FakeClock().apply { currentInstant = Instant.fromEpochMilliseconds(0) }
-        coEvery { api.requestDeviceCode() } returns Result.success(deviceCodeResponse(expiresIn = 900, interval = 5))
-        coEvery { api.pollToken(any(), any()) } returns TokenPollResult.TransientError("network down")
-        val viewModel = CloudSignInViewModel(api, clock)
+        coEvery { repository.requestDeviceCode() } returns Result.success(deviceCodeResponse(expiresIn = 900, interval = 5))
+        coEvery { repository.pollToken(any(), any()) } returns TokenPollResult.TransientError("network down")
+        val viewModel = CloudSignInViewModel(repository, clock)
 
         viewModel.startDeviceFlow()
         runCurrent()
@@ -104,18 +103,18 @@ class CloudSignInViewModelTest {
         advanceUntilIdle()
 
         assertInstanceOf(DeviceFlowUiState.Error::class.java, viewModel.uiState.value)
-        coVerify(atLeast = 2) { api.pollToken(any(), any()) }
+        coVerify(atLeast = 2) { repository.pollToken(any(), any()) }
     }
 
     @Test
     fun `Given a transient error then recovery when polling then the reconnecting flag clears`() = runTest {
-        coEvery { api.requestDeviceCode() } returns Result.success(deviceCodeResponse(interval = 5))
-        coEvery { api.pollToken(any(), any()) } returnsMany listOf(
+        coEvery { repository.requestDeviceCode() } returns Result.success(deviceCodeResponse(interval = 5))
+        coEvery { repository.pollToken(any(), any()) } returnsMany listOf(
             TokenPollResult.TransientError("blip"),
             TokenPollResult.Pending,
-            TokenPollResult.Success(tokenResponse()),
+            TokenPollResult.Success,
         )
-        val viewModel = CloudSignInViewModel(api, fixedClock())
+        val viewModel = CloudSignInViewModel(repository, fixedClock())
 
         viewModel.startDeviceFlow()
         runCurrent()
@@ -134,14 +133,14 @@ class CloudSignInViewModelTest {
 
         // Let the flow finish so no polling coroutine is left running.
         advanceUntilIdle()
-        assertEquals(DeviceFlowUiState.Authorized("access-token"), viewModel.uiState.value)
+        assertEquals(DeviceFlowUiState.Authorized, viewModel.uiState.value)
     }
 
     @Test
     fun `Given a CancellationException during polling when polling then it propagates and does not become an Error`() = runTest {
-        coEvery { api.requestDeviceCode() } returns Result.success(deviceCodeResponse())
-        coEvery { api.pollToken(any(), any()) } throws CancellationException("cancelled during poll")
-        val viewModel = CloudSignInViewModel(api, fixedClock())
+        coEvery { repository.requestDeviceCode() } returns Result.success(deviceCodeResponse())
+        coEvery { repository.pollToken(any(), any()) } throws CancellationException("cancelled during poll")
+        val viewModel = CloudSignInViewModel(repository, fixedClock())
 
         viewModel.startDeviceFlow()
         advanceUntilIdle()
@@ -159,13 +158,5 @@ class CloudSignInViewModelTest {
         verificationUriComplete = "https://stg.woowtech.io/device?user_code=ABCD-1234",
         expiresIn = expiresIn,
         interval = interval,
-    )
-
-    private fun tokenResponse() = TokenResponse(
-        accessToken = "access-token",
-        tokenType = "Bearer",
-        expiresIn = 3600,
-        scope = "ha:provision",
-        refreshToken = null,
     )
 }

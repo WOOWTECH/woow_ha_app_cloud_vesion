@@ -3,8 +3,8 @@ package io.homeassistant.companion.android.onboarding.cloudsignin
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.homeassistant.companion.android.onboarding.cloud.TokenPollResult
-import io.homeassistant.companion.android.onboarding.cloud.WoowPaasApi
+import io.homeassistant.companion.android.common.data.woowpaas.TokenPollResult
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
 import javax.inject.Inject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
@@ -22,16 +22,10 @@ private const val MAX_POLL_BACKOFF_SECONDS = 60
 
 @OptIn(ExperimentalTime::class)
 @HiltViewModel
-internal class CloudSignInViewModel internal constructor(private val api: WoowPaasApi, private val clock: Clock) :
-    ViewModel() {
-
-    /**
-     * Production constructor used by Hilt. [WoowPaasApi] is created directly (never injected) to keep its
-     * lazily-built [okhttp3.OkHttpClient] off the main thread, while [Clock] is provided by Hilt. The primary
-     * constructor exposes both dependencies so unit tests can supply fakes without going through Hilt.
-     */
-    @Inject
-    constructor(clock: Clock) : this(api = WoowPaasApi(), clock = clock)
+internal class CloudSignInViewModel @Inject constructor(
+    private val repository: WoowPaasRepository,
+    private val clock: Clock,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DeviceFlowUiState>(DeviceFlowUiState.Idle)
     val uiState = _uiState.asStateFlow()
@@ -54,7 +48,7 @@ internal class CloudSignInViewModel internal constructor(private val api: WoowPa
             try {
                 _uiState.value = DeviceFlowUiState.RequestingCode
 
-                api.requestDeviceCode().fold(
+                repository.requestDeviceCode().fold(
                     onSuccess = { response ->
                         currentDeviceCode = response.deviceCode
                         currentInterval = response.interval
@@ -101,11 +95,9 @@ internal class CloudSignInViewModel internal constructor(private val api: WoowPa
             while (true) {
                 delay(backoffInterval.seconds)
 
-                when (val result = api.pollToken(deviceCode, currentInterval)) {
+                when (val result = repository.pollToken(deviceCode, currentInterval)) {
                     is TokenPollResult.Success -> {
-                        _uiState.value = DeviceFlowUiState.Authorized(
-                            accessToken = result.token.accessToken,
-                        )
+                        _uiState.value = DeviceFlowUiState.Authorized
                         return@launch
                     }
                     is TokenPollResult.Pending -> {
@@ -168,6 +160,11 @@ internal sealed interface DeviceFlowUiState {
         val verificationUriComplete: String,
         val isReconnecting: Boolean = false,
     ) : DeviceFlowUiState
-    data class Authorized(val accessToken: String) : DeviceFlowUiState
+
+    /**
+     * The user authorized the device; the credentials are already persisted by the repository, so nothing
+     * has to be carried over to the next screen.
+     */
+    data object Authorized : DeviceFlowUiState
     data class Error(val message: String, val canRetry: Boolean) : DeviceFlowUiState
 }

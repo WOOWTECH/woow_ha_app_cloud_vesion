@@ -3,10 +3,14 @@ package io.homeassistant.companion.android.onboarding.cloudprovision
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.homeassistant.companion.android.onboarding.cloud.ApiException
-import io.homeassistant.companion.android.onboarding.cloud.CloudOnboardingState
-import io.homeassistant.companion.android.onboarding.cloud.WoowPaasApi
+import io.homeassistant.companion.android.common.data.woowpaas.ApiException
+import io.homeassistant.companion.android.common.data.woowpaas.ProvisionStatus
+import io.homeassistant.companion.android.common.data.woowpaas.SessionExpiredException
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasRepository
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasSessionRepository
 import java.io.IOException
+import java.net.HttpURLConnection.HTTP_FORBIDDEN
+import java.net.HttpURLConnection.HTTP_UNAVAILABLE
 import javax.inject.Inject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -22,20 +26,20 @@ private const val INITIAL_POLL_INTERVAL_MS = 5_000L
 private const val MAX_POLL_INTERVAL_MS = 30_000L
 private val POLL_TIMEOUT = 10.minutes
 
+private const val SESSION_EXPIRED_MESSAGE = "登入已過期，請返回重新登入"
+private const val SERVICE_UNAVAILABLE_MESSAGE = "服務尚未開放，請稍後再試"
+private const val MISSING_SCOPE_MESSAGE = "權限不足（缺少 ha:provision scope）"
+private const val PROVISION_FAILED_MESSAGE = "開通失敗"
+private const val STATUS_QUERY_FAILED_MESSAGE = "查詢狀態失敗"
+private const val MISSING_URL_MESSAGE = "伺服器回報就緒但未提供網址"
+
 @OptIn(ExperimentalTime::class)
 @HiltViewModel
-internal class CloudProvisionViewModel internal constructor(private val api: WoowPaasApi, private val clock: Clock) :
-    ViewModel() {
-
-    /**
-     * Production constructor used by Hilt. [WoowPaasApi] is created directly (never injected) to keep its
-     * lazily-built [okhttp3.OkHttpClient] off the main thread, while [Clock] is provided by Hilt. The primary
-     * constructor exposes both dependencies so unit tests can supply fakes without going through Hilt.
-     */
-    @Inject
-    constructor(clock: Clock) : this(api = WoowPaasApi(), clock = clock)
-
-    private var accessToken: String? = null
+internal class CloudProvisionViewModel @Inject constructor(
+    private val repository: WoowPaasRepository,
+    private val sessionRepository: WoowPaasSessionRepository,
+    private val clock: Clock,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ProvisionUiState>(ProvisionUiState.Idle)
     val uiState = _uiState.asStateFlow()
@@ -43,18 +47,28 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
     private var pollJob: Job? = null
     private var isProvisionInProgress = false
 
-    fun setAccessToken(sharedState: CloudOnboardingState) {
-        accessToken = sharedState.accessToken
-        if (accessToken == null) {
-            _uiState.value = ProvisionUiState.Error(
-                message = "登入已過期，請返回重新登入",
-                canRetry = false,
-            )
+    /**
+     * Checks that the sign in performed earlier left something worth trying, and reports when it did not.
+     *
+     * The credentials live in storage rather than in memory, so a screen rebuilt after the process was
+     * killed finds them again and the user carries on instead of signing in from scratch.
+     *
+     * The check is local and cannot be conclusive in the other direction: it only rules out the cases
+     * nothing can be done about, namely no stored session at all or an expired access token with no refresh
+     * token to replace it. A refresh token that the backend has since expired or revoked still looks fine
+     * from here and is only discovered when the first call tries to use it, which surfaces the same
+     * terminal error through [onProvisionClicked].
+     */
+    fun restoreSession() {
+        viewModelScope.launch {
+            val session = sessionRepository.currentSession()
+            if (session?.canAuthenticateAt(clock.now()) != true) {
+                _uiState.value = ProvisionUiState.Error(message = SESSION_EXPIRED_MESSAGE, canRetry = false)
+            }
         }
     }
 
     fun onProvisionClicked() {
-        val token = accessToken ?: return
         if (isProvisionInProgress) return
         isProvisionInProgress = true
 
@@ -62,51 +76,35 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
             try {
                 _uiState.value = ProvisionUiState.Provisioning
 
-                api.provision(token).fold(
+                repository.provision().fold(
                     onSuccess = { response ->
-                        when (response.status) {
-                            "ready" -> {
-                                val url = response.haUrl
-                                if (url != null) {
-                                    _uiState.value = ProvisionUiState.Ready(url)
-                                } else {
-                                    _uiState.value = ProvisionUiState.Error(
-                                        message = "伺服器回報就緒但未提供網址",
-                                        canRetry = true,
-                                    )
-                                }
+                        when (val status = response.status) {
+                            ProvisionStatus.Ready -> {
+                                _uiState.value = readyStateFor(response.haUrl)
                             }
-                            "provisioning" -> {
-                                startStatusPolling(token)
+                            ProvisionStatus.Provisioning -> {
+                                startStatusPolling()
                             }
-                            "suspended" -> {
+                            ProvisionStatus.Suspended -> {
                                 _uiState.value = ProvisionUiState.Suspended
                             }
-                            "deleting" -> {
+                            ProvisionStatus.Deleting -> {
                                 _uiState.value = ProvisionUiState.Deleting
                             }
-                            else -> {
+                            // A provisioning request never answers "none" or "error"; surface the raw value.
+                            ProvisionStatus.None,
+                            ProvisionStatus.Error,
+                            is ProvisionStatus.Unknown,
+                            -> {
                                 _uiState.value = ProvisionUiState.Error(
-                                    message = "未預期的狀態: ${response.status}",
+                                    message = "未預期的狀態: ${status.rawValue}",
                                     canRetry = true,
                                 )
                             }
                         }
                     },
                     onFailure = { error ->
-                        val message = when {
-                            error is ApiException && error.code == 503 ->
-                                "服務尚未開放，請稍後再試"
-                            error is ApiException && error.code == 401 ->
-                                "登入已過期，請返回重新登入"
-                            error is ApiException && error.code == 403 ->
-                                "權限不足（缺少 ha:provision scope）"
-                            else -> error.message ?: "開通失敗"
-                        }
-                        _uiState.value = ProvisionUiState.Error(
-                            message = message,
-                            canRetry = error !is ApiException || error.code != 401,
-                        )
+                        _uiState.value = errorStateFor(error, fallbackMessage = PROVISION_FAILED_MESSAGE)
                     },
                 )
             } finally {
@@ -122,9 +120,10 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
      *
      * Transient network failures (an [IOException] such as a socket timeout or DNS hiccup) do not abort the
      * wait: the loop keeps polling with an exponential backoff, bounded by [POLL_TIMEOUT] measured against the
-     * injected [Clock]. Only terminal failures (e.g. an [ApiException] carrying a 401/403) stop the flow.
+     * injected [Clock]. Only terminal failures stop the flow, and the repository refreshes the credentials on
+     * its own, so an access token expiring mid wait is not one of them.
      */
-    private fun startStatusPolling(token: String) {
+    private fun startStatusPolling() {
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
             var interval = INITIAL_POLL_INTERVAL_MS
@@ -142,42 +141,38 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
                         return@launch
                     }
 
-                    api.getStatus(token).fold(
+                    repository.getStatus().fold(
                         onSuccess = { response ->
-                            when (response.status) {
-                                "ready" -> {
-                                    val url = response.haUrl
-                                    if (url != null) {
-                                        _uiState.value = ProvisionUiState.Ready(url)
-                                    } else {
-                                        _uiState.value = ProvisionUiState.Error(
-                                            message = "伺服器回報就緒但未提供網址",
-                                            canRetry = true,
-                                        )
-                                    }
+                            when (val status = response.status) {
+                                ProvisionStatus.Ready -> {
+                                    _uiState.value = readyStateFor(response.haUrl)
                                     return@launch
                                 }
-                                "provisioning" -> {
+                                ProvisionStatus.Provisioning -> {
                                     interval = (interval * 2).coerceAtMost(MAX_POLL_INTERVAL_MS)
                                 }
-                                "error" -> {
+                                ProvisionStatus.Error -> {
                                     _uiState.value = ProvisionUiState.Error(
                                         message = response.error ?: "佈建失敗",
                                         canRetry = true,
                                     )
                                     return@launch
                                 }
-                                "suspended" -> {
+                                ProvisionStatus.Suspended -> {
                                     _uiState.value = ProvisionUiState.Suspended
                                     return@launch
                                 }
-                                "deleting" -> {
+                                ProvisionStatus.Deleting -> {
                                     _uiState.value = ProvisionUiState.Deleting
                                     return@launch
                                 }
-                                else -> {
+                                // "none" means the instance vanished mid-flow, which is as abnormal here
+                                // as a status this version does not know about.
+                                ProvisionStatus.None,
+                                is ProvisionStatus.Unknown,
+                                -> {
                                     _uiState.value = ProvisionUiState.Error(
-                                        message = "異常狀態：${response.status}",
+                                        message = "異常狀態：${status.rawValue}",
                                         canRetry = true,
                                     )
                                     return@launch
@@ -192,12 +187,10 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
                                 error is IOException -> {
                                     interval = (interval * 2).coerceAtMost(MAX_POLL_INTERVAL_MS)
                                 }
-                                // Terminal failure (e.g. ApiException 401/403): stop
+                                // Terminal failure: stop
                                 else -> {
-                                    _uiState.value = ProvisionUiState.Error(
-                                        message = error.message ?: "查詢狀態失敗",
-                                        canRetry = true,
-                                    )
+                                    _uiState.value =
+                                        errorStateFor(error, fallbackMessage = STATUS_QUERY_FAILED_MESSAGE)
                                     return@launch
                                 }
                             }
@@ -208,6 +201,29 @@ internal class CloudProvisionViewModel internal constructor(private val api: Woo
                 isProvisionInProgress = false
             }
         }
+    }
+
+    private fun readyStateFor(haUrl: String?): ProvisionUiState = if (haUrl != null) {
+        ProvisionUiState.Ready(haUrl)
+    } else {
+        ProvisionUiState.Error(message = MISSING_URL_MESSAGE, canRetry = true)
+    }
+
+    /**
+     * Turns a failure into the screen state describing it.
+     *
+     * A [SessionExpiredException] is the only case that cannot be retried: the repository already tried to
+     * refresh the credentials and the backend refused, so the user has to sign in again. Everything else,
+     * including a backend that could not be reached while refreshing, is worth another attempt.
+     */
+    private fun errorStateFor(error: Throwable, fallbackMessage: String): ProvisionUiState.Error {
+        val message = when {
+            error is SessionExpiredException -> SESSION_EXPIRED_MESSAGE
+            error is ApiException && error.code == HTTP_UNAVAILABLE -> SERVICE_UNAVAILABLE_MESSAGE
+            error is ApiException && error.code == HTTP_FORBIDDEN -> MISSING_SCOPE_MESSAGE
+            else -> error.message ?: fallbackMessage
+        }
+        return ProvisionUiState.Error(message = message, canRetry = error !is SessionExpiredException)
     }
 }
 

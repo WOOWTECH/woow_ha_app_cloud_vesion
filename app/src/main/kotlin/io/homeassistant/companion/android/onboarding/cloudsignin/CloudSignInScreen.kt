@@ -51,7 +51,7 @@ import io.homeassistant.companion.android.util.compose.HAPreviews
 internal fun CloudSignInScreen(
     viewModel: CloudSignInViewModel,
     onBackClick: () -> Unit,
-    onAuthorized: (accessToken: String) -> Unit,
+    onAuthorized: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -66,7 +66,7 @@ internal fun CloudSignInScreen(
     LaunchedEffect(uiState) {
         if (uiState is DeviceFlowUiState.Authorized && !hasNavigated) {
             hasNavigated = true
-            onAuthorized((uiState as DeviceFlowUiState.Authorized).accessToken)
+            onAuthorized()
         }
     }
 

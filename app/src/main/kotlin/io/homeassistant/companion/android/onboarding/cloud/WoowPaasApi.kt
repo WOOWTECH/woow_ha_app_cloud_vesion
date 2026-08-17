@@ -137,7 +137,7 @@ internal class WoowPaasApi {
                 .build()
 
             val request = Request.Builder()
-                .url("${WoowPaasConfig.BASE_URL}/oauth2/device_authorization")
+                .url(WoowPaasConfig.resolveUrl("/oauth2/device_authorization"))
                 .post(body)
                 .build()
 
@@ -169,7 +169,7 @@ internal class WoowPaasApi {
                 .build()
 
             val request = Request.Builder()
-                .url("${WoowPaasConfig.BASE_URL}/oauth2/token")
+                .url(WoowPaasConfig.resolveUrl("/oauth2/token"))
                 .post(body)
                 .build()
 
@@ -224,7 +224,7 @@ internal class WoowPaasApi {
     suspend fun provision(accessToken: String): Result<ProvisionResponse> = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
-                .url("${WoowPaasConfig.BASE_URL}/api/ha-paas/provision")
+                .url(WoowPaasConfig.resolveUrl("/api/ha-paas/provision"))
                 .post(FormBody.Builder().build())
                 .addHeader("Authorization", "Bearer $accessToken")
                 .build()
@@ -263,7 +263,7 @@ internal class WoowPaasApi {
     suspend fun getStatus(accessToken: String): Result<StatusResponse> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url("${WoowPaasConfig.BASE_URL}/api/ha-paas/status")
+                .url(WoowPaasConfig.resolveUrl("/api/ha-paas/status"))
                 .get()
                 .addHeader("Authorization", "Bearer $accessToken")
                 .build()

@@ -8,6 +8,13 @@ import org.gradle.kotlin.dsl.configure
 private const val APPLICATION_ID = "com.woowtech.homecloud"
 private const val NAMESPACE = "io.homeassistant.companion.android"
 
+// WOOW paas 環境設定：debug 走 stg，release 走 prod。
+// prod 端點皆在網域根路徑下（已由 paas-platform 諮詢確認，`/woow` 只是 SPA 網頁入口，不是 API 前綴）。
+private const val WOOW_PAAS_BASE_URL_DEBUG = "https://stg.woowtech.io"
+private const val WOOW_PAAS_BASE_URL_RELEASE = "https://paas.woowtech.io"
+private const val WOOW_PAAS_CLIENT_ID = "woow-ha-app"
+private const val WOOW_PAAS_SCOPES = "ha:provision workspace:read smarthome:read"
+
 /**
  * A convention plugin that applies common configurations to Android application modules.
  * This centralizes configuration, preventing duplication across multiple modules.
@@ -71,11 +78,17 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 buildTypes {
                     named("debug").configure {
                         applicationIdSuffix = ".debug"
+                        buildConfigField("String", "WOOW_PAAS_BASE_URL", "\"$WOOW_PAAS_BASE_URL_DEBUG\"")
+                        buildConfigField("String", "WOOW_PAAS_CLIENT_ID", "\"$WOOW_PAAS_CLIENT_ID\"")
+                        buildConfigField("String", "WOOW_PAAS_SCOPES", "\"$WOOW_PAAS_SCOPES\"")
                     }
                     named("release").configure {
                         isDebuggable = false
                         isJniDebuggable = false
                         signingConfig = signingConfigs.getByName("release")
+                        buildConfigField("String", "WOOW_PAAS_BASE_URL", "\"$WOOW_PAAS_BASE_URL_RELEASE\"")
+                        buildConfigField("String", "WOOW_PAAS_CLIENT_ID", "\"$WOOW_PAAS_CLIENT_ID\"")
+                        buildConfigField("String", "WOOW_PAAS_SCOPES", "\"$WOOW_PAAS_SCOPES\"")
                     }
                 }
             }

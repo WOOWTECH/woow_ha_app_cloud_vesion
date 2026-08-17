@@ -45,7 +45,6 @@ import io.homeassistant.companion.android.util.compose.HAPreviews
 @Composable
 internal fun CloudProvisionScreen(
     viewModel: CloudProvisionViewModel,
-    sharedState: io.homeassistant.companion.android.onboarding.cloud.CloudOnboardingState,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -54,7 +53,7 @@ internal fun CloudProvisionScreen(
     var hasLaunched by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        viewModel.setAccessToken(sharedState)
+        viewModel.restoreSession()
     }
 
     LaunchedEffect(uiState) {
@@ -77,7 +76,7 @@ internal fun CloudProvisionScreen(
 }
 
 @Composable
-private fun CloudProvisionContent(
+internal fun CloudProvisionContent(
     uiState: ProvisionUiState,
     onBackClick: () -> Unit,
     onProvisionClick: () -> Unit,

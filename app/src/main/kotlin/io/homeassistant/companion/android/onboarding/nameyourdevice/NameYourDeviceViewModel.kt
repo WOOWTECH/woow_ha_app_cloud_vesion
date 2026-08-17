@@ -12,10 +12,12 @@ import io.homeassistant.companion.android.common.R as commonR
 import io.homeassistant.companion.android.common.data.authentication.ServerRegistrationRepository
 import io.homeassistant.companion.android.common.data.integration.DeviceRegistration
 import io.homeassistant.companion.android.common.data.servers.ServerManager
+import io.homeassistant.companion.android.common.data.woowpaas.WoowPaasSessionRepository
 import io.homeassistant.companion.android.common.util.AppVersionProvider
 import io.homeassistant.companion.android.common.util.MessagingTokenProvider
 import io.homeassistant.companion.android.onboarding.nameyourdevice.navigation.NameYourDeviceRoute
 import io.homeassistant.companion.android.util.isPubliclyAccessible
+import java.io.IOException
 import java.net.URL
 import javax.inject.Inject
 import javax.net.ssl.SSLException
@@ -59,6 +61,7 @@ internal class NameYourDeviceViewModel @VisibleForTesting constructor(
     private val serverRegistrationRepository: ServerRegistrationRepository,
     private val appVersionProvider: AppVersionProvider,
     private val messagingTokenProvider: MessagingTokenProvider,
+    private val woowPaasSessionRepository: WoowPaasSessionRepository,
     defaultName: String = Build.MODEL,
 ) : ViewModel() {
 
@@ -69,12 +72,14 @@ internal class NameYourDeviceViewModel @VisibleForTesting constructor(
         serverRegistrationRepository: ServerRegistrationRepository,
         appVersionProvider: AppVersionProvider,
         messagingTokenProvider: MessagingTokenProvider,
+        woowPaasSessionRepository: WoowPaasSessionRepository,
     ) : this(
         savedStateHandle.toRoute<NameYourDeviceRoute>(),
         serverManager,
         serverRegistrationRepository,
         appVersionProvider,
         messagingTokenProvider,
+        woowPaasSessionRepository,
     )
 
     private val _navigationEventsFlow = MutableSharedFlow<NameYourDeviceNavigationEvent>()
@@ -155,6 +160,7 @@ internal class NameYourDeviceViewModel @VisibleForTesting constructor(
             )
             // Active the newly added server
             serverManager.activateServer(serverId)
+            discardCloudSession()
 
             return serverId
         } catch (e: Exception) {
@@ -172,6 +178,26 @@ internal class NameYourDeviceViewModel @VisibleForTesting constructor(
                     .onFailure { Timber.e(it, "Failed to remove temporary server") }
             }
             throw e
+        }
+    }
+
+    /**
+     * Drops the WOOW PaaS credentials now that the server they produced belongs to the application.
+     *
+     * They only exist to obtain the address of a cloud instance during onboarding: keeping them around
+     * afterwards would store credentials nothing reads. A server registered through a local address never
+     * had such a session and this is then a no-op.
+     *
+     * A storage failure is logged rather than propagated. The storage in use today cannot report one, but
+     * the guard is deliberate rather than defensive clutter: this runs after the server is registered, so
+     * letting a failure out would revert a registration that actually succeeded, only to leave behind
+     * credentials nobody reads.
+     */
+    private suspend fun discardCloudSession() {
+        try {
+            woowPaasSessionRepository.clearSession()
+        } catch (e: IOException) {
+            Timber.e(e, "Failed to discard the WOOW PaaS session after the server was registered")
         }
     }
 }

@@ -35,7 +35,13 @@ jobs:
           cp .github/mock-google-services.json automotive/google-services.json
 
       - name: Build Full Debug APK
-        run: ./gradlew :app:assembleFullDebug
+        # reckon.stage/scope override: the base tag 'v2026.8.3-cloud-alpha1'
+        # has a pre-release suffix ('cloud-alpha1') that isn't in the CI stage
+        # allowlist (settings.gradle.kts declares stages("beta", "final")), so
+        # unattended reckon falls back to 0.0.1-beta which is < base tag and
+        # aborts. Passing an explicit stage+scope forces reckon to compute a
+        # well-formed 2026.9.0-beta.N+sha above the base.
+        run: ./gradlew :app:assembleFullDebug -Preckon.stage=beta -Preckon.scope=minor
 
       - name: Get branch name and version
         id: info

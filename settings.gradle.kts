@@ -41,7 +41,13 @@ if (!isWorktree) {
         } else {
             stages("beta", "final")
         }
-        setScopeCalc { java.util.Optional.of(org.ajoberstar.reckon.core.Scope.PATCH) }
+        // Integration-branch override: base tag v2026.8.3-cloud-alpha1 has a
+        // non-standard pre-release suffix ('cloud-alpha1' rather than 'beta.N'
+        // or 'alpha.N'), which reckon can't map to a next-version. Forcing
+        // MAJOR scope makes reckon compute 2027.0.0-beta.N which is well
+        // above the base tag, unblocking dev builds. Revert this or rename
+        // the tag before merging to main.
+        setScopeCalc { java.util.Optional.of(org.ajoberstar.reckon.core.Scope.MAJOR) }
         setStageCalc(calcStageFromProp())
         setTagWriter { it.toString() }
     }

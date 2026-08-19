@@ -27,29 +27,20 @@ plugins {
     id("org.ajoberstar.reckon.settings").version("1.0.1").apply(false)
 }
 
+// Integration-branch bypass: the base tag v2026.8.3-cloud-alpha1 has a
+// pre-release suffix ('cloud-alpha1') that reckon cannot map to a next
+// version (stages allowlist is 'beta', 'final'; 'cloud-alpha' isn't in it).
+// The tag is an official GitHub Release marker with a distributed APK asset
+// and can't be renamed or deleted. Any reckon config we try still fails
+// the guard `reckoned < base` because reckon starts from 0.0.0 when the base
+// isn't parseable.
+//
+// Bypass reckon entirely on this branch and hardcode a version above the
+// base tag. Revert or find a permanent solution (rename tag / add stage /
+// upgrade reckon) before merging to main.
 if (!isWorktree) {
-    apply(plugin = "org.ajoberstar.reckon.settings")
-
-    extensions.configure<org.ajoberstar.reckon.gradle.ReckonExtension>("reckon") {
-        val isCiBuild = providers.environmentVariable("CI").isPresent
-
-        setDefaultInferredScope("patch")
-        if (!isCiBuild) {
-            // Use a snapshot version scheme with Reckon when not running in CI, which allows caching to
-            // improve performance. Background: https://github.com/home-assistant/android/issues/5220.
-            snapshots()
-        } else {
-            stages("beta", "final")
-        }
-        // Integration-branch override: base tag v2026.8.3-cloud-alpha1 has a
-        // non-standard pre-release suffix ('cloud-alpha1' rather than 'beta.N'
-        // or 'alpha.N'), which reckon can't map to a next-version. Forcing
-        // MAJOR scope makes reckon compute 2027.0.0-beta.N which is well
-        // above the base tag, unblocking dev builds. Revert this or rename
-        // the tag before merging to main.
-        setScopeCalc { java.util.Optional.of(org.ajoberstar.reckon.core.Scope.MAJOR) }
-        setStageCalc(calcStageFromProp())
-        setTagWriter { it.toString() }
+    gradle.beforeProject {
+        version = "2027.0.0-beta.1+integrated"
     }
 }
 

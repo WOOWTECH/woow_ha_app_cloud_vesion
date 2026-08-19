@@ -10,16 +10,7 @@ private const val NAMESPACE = "io.homeassistant.companion.android"
 
 // WOOW paas 環境設定：debug 走 stg，release 走 prod。
 // prod 端點皆在網域根路徑下（已由 paas-platform 諮詢確認，`/woow` 只是 SPA 網頁入口，不是 API 前綴）。
-//
-// Integration-branch override: stg.woowtech.io is behind Cloudflare Access — a
-// plain HTTP client (no browser cookie / no CF service token) gets redirected
-// to woowtech.cloudflareaccess.com/cdn-cgi/access/login and receives HTML
-// instead of JSON, which the OAuth device_authorization call decodes as
-// "伺服器回應格式錯誤" (server response format error). Point debug at prod
-// so real-device onboarding can be validated end-to-end on Pixel 7a.
-// TODO(perm): plumb a Cloudflare Access service token / bypass for stg,
-// or split debug into two flavors (debug-stg vs debug-prod).
-private const val WOOW_PAAS_BASE_URL_DEBUG = "https://paas.woowtech.io"
+private const val WOOW_PAAS_BASE_URL_DEBUG = "https://stg.woowtech.io"
 private const val WOOW_PAAS_BASE_URL_RELEASE = "https://paas.woowtech.io"
 private const val WOOW_PAAS_CLIENT_ID = "woow-ha-app"
 private const val WOOW_PAAS_SCOPES = "ha:provision workspace:read smarthome:read"

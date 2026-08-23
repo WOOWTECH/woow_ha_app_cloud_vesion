@@ -1,5 +1,7 @@
 # Cloud Onboarding Integration Test — 2026-08-19
 
+> 👉 **Handing off / picking up this work?** Read [**`HANDOFF.md`**](HANDOFF.md) first (owners, action items, reproduce-in-15-min guide). This document is the deep retrospective — background reading, not action items.
+
 **Status**: ✅ End-to-end path (Eugene stack → PaaS device flow → user_code issued) verified on real device (Pixel 7a / Android 16). Ready to merge to `main` once permanent fixes below are applied.
 
 **Branch**: [`dev/cloud-onboarding-integrated`](../../tree/dev/cloud-onboarding-integrated)
